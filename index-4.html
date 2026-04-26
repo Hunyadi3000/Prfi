@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>Preferansz – Többjátékos</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{background:#082808;font-family:Georgia,serif;color:#fff;overscroll-behavior:none;}
+  button,input{font-family:Georgia,serif;}
+  #app{min-height:100vh;max-width:480px;margin:0 auto;display:flex;flex-direction:column;}
+  input{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);color:#fff;
+    border-radius:8px;padding:10px 14px;font-size:16px;width:100%;outline:none;}
+  input::placeholder{color:rgba(255,255,255,0.4);}
+  input:focus{border-color:#f9a825;}
+  .code{font-size:36px;font-weight:bold;letter-spacing:8px;color:#ffee58;
+    background:rgba(0,0,0,0.4);border-radius:12px;padding:16px 24px;
+    text-align:center;border:2px dashed rgba(255,238,88,0.5);cursor:pointer;
+    user-select:all;-webkit-user-select:all;}
+</style>
+</head>
+<body>
+<div id="app"><div style="color:#a5d6a7;text-align:center;padding:60px 20px;font-size:14px;">Betöltés...</div></div>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+// ═══ ÁLLANDÓK ═══════════════════════════════════════════════
+const SUITS=['zold','sarga','piros','makk'];
+const SI={zold:{n:'Zöld',col:'#2e7d32',dark:'#1b5e20'},sarga:{n:'Sárga',col:'#e65100',dark:'#bf360c'},piros:{n:'Piros',col:'#c62828',dark:'#7f0000'},makk:{n:'Makk',col:'#5d3a1a',dark:'#3e2006'}};
+const VALS=['7','8','9','10','A','F','K','Á'];
+const VR={'7':0,'8':1,'9':2,'10':3,'A':4,'F':5,'K':6,'Á':7};
+const GAMES=[{id:2,n:'Zöld',trump:'zold',tp:'color',tgt:6},{id:3,n:'Sárga',trump:'sarga',tp:'color',tgt:6},{id:4,n:'Piros',trump:'piros',tp:'color',tgt:6},{id:5,n:'Makk',trump:'makk',tp:'color',tgt:6},{id:6,n:'Betli',trump:null,tp:'betli',tgt:0},{id:7,n:'Mizer',trump:null,tp:'mizer',tgt:1},{id:8,n:'Szanadu',trump:null,tp:'szanadu',tgt:6},{id:9,n:'Pikkoló',trump:null,tp:'pikkolo',tgt:2},{id:10,n:'Preferansz',trump:null,tp:'preferansz',tgt:6}];
+const G='#1b5e20',DG='#082808';
+
+// ═══ HÁLÓZAT ════════════════════════════════════════════════
+let peer=null, isHost=false, myIndex=0;
+let pNames=['Gazda','Vendég 1','Vendég 2'];
+let roomCode='';
+let pConns=[null,null,null]; // host: pConns[1],pConns[2] = peer connections
+let hostConn=null;           // client: connection to host
+let netPhase='lobby';        // lobby|hosting|joining|waiting|playing|disconnected
+let joinedCount=0;
+let myNameInput='', joinCodeInput='';
+let netError='';
+
+function genCode(){return Math.random().toString(36).slice(2,8).toUpperCase();}
+
+function doHost(name){
+  myNameInput=name; pNames[0]=name;
+  isHost=true; myIndex=0; netError='';
+  roomCode=genCode();
+  netPhase='hosting';
+  _makePeer(roomCode);
+}
+
+function _makePeer(id){
+  if(peer){try{peer.destroy();}catch(e){}}
+  peer=new Peer(id,{debug:0});
+  peer.on('error',err=>{
+    if(err.type==='unavailable-id'&&isHost){roomCode=genCode();_makePeer(roomCode);}
+    else{netError='Hálózati hiba: '+err.message;netPhase='lobby';render();}
+  });
+  peer.on('open',()=>{render();});
+  if(isHost){
+    peer.on('connection',conn=>{
+      conn.on('open',()=>{
+        conn.on('data',data=>{
+          if(data.type==='hello'){
+            if(joinedCount>=2){conn.close();return;}
+            const idx=joinedCount+1; joinedCount++;
+            pNames[idx]=data.name; pConns[idx]=conn;
+            conn.metadata={idx};
+            conn.send({type:'welcome',myIndex:idx,names:pNames});
+            _broadcastPlayers();
+            if(joinedCount===2){netPhase='ready';}
+            render();
+          } else if(data.type==='action'){
+            _handleAction(data.action, conn.metadata?.idx||_connIdx(conn));
+          }
+        });
+        conn.on('close',()=>{netPhase='disconnected';render();});
+      });
+    });
+  }
+}
+
+function _connIdx(c){return pConns.indexOf(c);}
+
+function doJoin(name,code){
+  myNameInput=name; netError='';
+  isHost=false; netPhase='joining';
+  render();
+  if(peer){try{peer.destroy();}catch(e){}}
+  peer=new Peer(undefined,{debug:0});
+  peer.on('error',err=>{netError='Nem sikerült csatlakozni! Ellenőrizd a kódot.';netPhase='lobby';render();});
+  peer.on('open',()=>{
+    hostConn=peer.connect(code.trim().toUpperCase(),{reliable:true});
+    hostConn.on('open',()=>{hostConn.send({type:'hello',name});});
+    hostConn.on('data',data=>{
+      if(data.type==='welcome'){myIndex=data.myIndex;pNames=data.names;netPhase='waiting';render();}
+      else if(data.type==='players'){pNames=data.names;render();}
+      else if(data.type==='state'){state=data.state;pNames=data.names||pNames;render();}
+    });
+    hostConn.on('close',()=>{netPhase='disconnected';render();});
+  });
+}
+
+function _broadcastPlayers(){
+  [1,2].forEach(i=>{if(pConns[i]&&pConns[i].open)pConns[i].send({type:'players',names:pNames});});
+}
+
+function broadcastState(){
+  if(!isHost)return;
+  const msg={type:'state',state,names:pNames};
+  [1,2].forEach(i=>{if(pConns[i]&&pConns[i].open)pConns[i].send(msg);});
+}
+
+function sendAction(action){
+  if(isHost){_handleAction(action,0);}
+  else if(hostConn&&hostConn.open){hostConn.send({type:'action',action});}
+}
+
+function _handleAction(action,fromIdx){
+  if(!isHost)return;
+  const s=state;
+  if(action.kind==='bid'&&s.phase==='bid'&&s.bidder===fromIdx){processBid(fromIdx,action.amount);}
+  else if(action.kind==='play'&&s.phase==='play'&&s.curP===fromIdx){
+    const card=s.hands[fromIdx].find(c=>c.id===action.cardId);
+    if(card)_doPlay(fromIdx,card);
+  } else if(action.kind==='discard'&&s.phase==='discard'&&s.bidWinner===fromIdx){
+    _doDiscard(action.cardId);
+  } else if(action.kind==='pickGame'&&s.phase==='selectGame'&&s.bidWinner===fromIdx){
+    const g=GAMES.find(g=>g.id===action.gameId);
+    if(g)_doPickGame(g);
+  }
+}
+
+// ═══ JÁTÉK ÁLLAPOT ══════════════════════════════════════════
+let state={phase:'result',hands:[[],[],[]],talon:[],bidder:0,highBid:0,highBidder:null,passed:[false,false,false],activeCnt:3,game:null,bidWinner:null,trick:[],tw:[0,0,0],curP:0,msg:'',scores:[-10,-10,-10],log:[],showTalon:false,liftedCard:null,resultMsg:'Üdvözlet! A gazda indítja az első kört.'};
+
+function addLog(m){state.log=[m,...state.log].slice(0,14);}
+function after(){render();broadcastState();}
+
+function startRound(){
+  if(!isHost)return;
+  const deck=_shuffle(_mkDeck());
+  addLog('── Új kör ──');
+  state={...state,phase:'bid',hands:[deck.slice(0,10),deck.slice(10,20),deck.slice(20,30)],talon:deck.slice(30,32),bidder:0,highBid:0,highBidder:null,passed:[false,false,false],activeCnt:3,game:null,bidWinner:null,trick:[],tw:[0,0,0],curP:0,showTalon:false,liftedCard:null,resultMsg:'',msg:`${pNames[0]} licitál...`};
+  after();
+}
+
+function processBid(pl,amount){
+  const np=[...state.passed];
+  let nHB=state.highBid,nHBr=state.highBidder,nAct=state.activeCnt;
+  if(amount){nHB=amount;nHBr=pl;addLog(`${pNames[pl]}: ${amount} → ${GAMES.find(g=>g.id>=amount)?.n}`);}
+  else{np[pl]=true;nAct--;addLog(`${pNames[pl]}: Passz`);}
+  state={...state,passed:np,highBid:nHB,highBidder:nHBr,activeCnt:nAct};
+  if(nAct<=1||nHB>=10){_resolveAuction(nHBr,nHB);return;}
+  let nx=(pl+1)%3; while(np[nx])nx=(nx+1)%3;
+  state={...state,bidder:nx,msg:`${pNames[nx]} licitál...`};
+  after();
+}
+
+function _resolveAuction(winner,winBid){
+  if(winner===null||winner===undefined){addLog('Körpassz!');state={...state,resultMsg:'Körpassz – senki sem licitált.',phase:'result'};after();return;}
+  state={...state,bidWinner:winner,showTalon:true}; addLog(`${pNames[winner]} nyerte (${winBid})`);
+  state={...state,msg:`${pNames[winner]} megnézi a talont... Válasszon játékot!`,phase:'selectGame'};
+  after();
+}
+
+function _doPickGame(g){
+  const nh=state.hands.map(h=>[...h]);
+  const bw=state.bidWinner;
+  nh[bw]=[...nh[bw],...state.talon];
+  addLog(`Játék: ${g.n} (${pNames[bw]})`);
+  state={...state,game:g,hands:nh,showTalon:false,liftedCard:null,phase:'discard',msg:`${pNames[bw]} eldob 2 lapot...`};
+  after();
+}
+
+function _doDiscard(cardId){
+  const nh=state.hands.map(h=>[...h]);
+  const bw=state.bidWinner;
+  nh[bw]=nh[bw].filter(c=>c.id!==cardId);
+  if(nh[bw].length===10){
+    const sp=state.game.tp==='color'?((bw+1)%3):((bw+2)%3);
+    state={...state,hands:nh,liftedCard:null,curP:sp,phase:'play',msg:`${state.game.n} – ${pNames[sp]} kezd!`};
+  } else {
+    state={...state,hands:nh,liftedCard:null,msg:`${pNames[state.bidWinner]}: még ${nh[state.bidWinner].length-10} lapot dob el`};
+  }
+  after();
+}
+
+function _doPlay(pl,card){
+  const nh=state.hands.map((h,i)=>i===pl?h.filter(c=>c.id!==card.id):h);
+  const nt=[...state.trick,{pl,card}];
+  state={...state,hands:nh,trick:nt};
+  if(nt.length<3){
+    const nx=(pl+1)%3;
+    state={...state,curP:nx,msg:`${pNames[nx]} köre...`};
+    after();return;
+  }
+  const w=_trickWinner(nt,state.game?.trump);
+  const nTW=state.tw.map((t,i)=>i===w?t+1:t);
+  addLog(`${pNames[w]} viszi → T:${nTW[0]} G:${nTW[1]} B:${nTW[2]}`);
+  state={...state,tw:nTW};
+  if(nh[0].length===0){
+    state={...state,phase:'evaluating',msg:'Utolsó menet...'};
+    after();
+    setTimeout(()=>_evalGame(nTW),1800);
+  } else {
+    state={...state,phase:'between'};after();
+    setTimeout(()=>{state={...state,trick:[],curP:w,phase:'play',msg:`${pNames[w]} kezd...`};after();},1500);
+  }
+}
+
+function _evalGame(finalTW){
+  const bw=state.bidWinner,got=finalTW[bw],g=state.game; let won=false;
+  if(['color','szanadu','preferansz'].includes(g.tp))won=got>=g.tgt;
+  else if(g.tp==='betli')won=got===0; else if(g.tp==='mizer')won=got===1; else if(g.tp==='pikkolo')won=got===2;
+  const r=`${won?'✓ Megnyerte':'✗ Megbukott'}: ${pNames[bw]} (${got}/${g.tgt})`;
+  addLog(r);
+  const ns=[...state.scores]; if(won)ns[bw]=Math.min(0,ns[bw]+g.id); else ns[bw]-=g.id;
+  state={...state,scores:ns,resultMsg:r,phase:'result'}; after();
+}
+
+// ═══ JÁTÉK SEGÉDFÜGGVÉNYEK ══════════════════════════════════
+function _mkDeck(){return SUITS.flatMap(s=>VALS.map(v=>({s,v,id:`${s}_${v}`})));}
+function _shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]];}return b;}
+function _trickWinner(trick,trump){const lead=trick[0].card.s;return trick.reduce((best,cur)=>{const bp=(best.card.s===trump?100:best.card.s===lead?10:0)+VR[best.card.v];const cp=(cur.card.s===trump?100:cur.card.s===lead?10:0)+VR[cur.card.v];return cp>bp?cur:best;}).pl;}
+
+// ═══ HELYI AKCIÓK (elküldik a gazda felé) ═══════════════════
+function myBid(amount){
+  if(state.phase!=='bid'||state.bidder!==myIndex)return;
+  sendAction({kind:'bid',amount});
+}
+function myPickGame(g){
+  if(state.phase!=='selectGame'||state.bidWinner!==myIndex)return;
+  sendAction({kind:'pickGame',gameId:g.id});
+}
+function myDiscard(cardId){
+  if(state.phase!=='discard'||state.bidWinner!==myIndex)return;
+  const nh=state.hands[myIndex];
+  if(state.liftedCard===cardId){
+    state.liftedCard=null; sendAction({kind:'discard',cardId});
+  } else {
+    state={...state,liftedCard:cardId}; render();
+  }
+}
+function myPlay(card){
+  if(state.phase!=='play'||state.curP!==myIndex)return;
+  const lead=state.trick[0]?.card.s;
+  if(lead&&state.hands[myIndex].some(c=>c.s===lead)&&card.s!==lead){
+    state={...state,msg:'⚠️ Kötelező azonos színt rakni!'};render();return;
+  }
+  if(state.liftedCard===card.id){
+    state.liftedCard=null; sendAction({kind:'play',cardId:card.id});
+  } else {
+    state={...state,liftedCard:card.id}; render();
+  }
+}
+
+// ═══ SVG KÁRTYARAJZOLÁS ══════════════════════════════════════
+const NS='http://www.w3.org/2000/svg';
+function mkS(tag,attrs){const e=document.createElementNS(NS,tag);if(attrs)Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));return e;}
+
+function drawSuit(parent,suit,cx,cy,size){
+  const g=mkS('g',{transform:`translate(${cx-size/2},${cy-size/2}) scale(${size/20})`});
+  if(suit==='makk'){
+    g.appendChild(mkS('ellipse',{cx:10,cy:13.5,rx:5.5,ry:6,fill:'#7b4f2e'}));
+    g.appendChild(mkS('ellipse',{cx:8,cy:11,rx:2,ry:3,fill:'rgba(255,255,255,0.12)'}));
+    g.appendChild(mkS('path',{d:'M3.5,8.5 Q5,5.5 10,5 Q15,5.5 16.5,8.5 Q13.5,10.5 10,10.5 Q6.5,10.5 3.5,8.5Z',fill:'#4a2810'}));
+    [5.5,7.5,10,12.5,14.5].forEach(x=>g.appendChild(mkS('line',{x1:x,y1:5.8,x2:x+0.4,y2:10.2,stroke:'#3a1f08','stroke-width':0.7})));
+    g.appendChild(mkS('path',{d:'M8.5,5 Q9,1.5 10,1.5 Q11,1.5 11.5,5',fill:'#4a2810'}));
+  } else if(suit==='zold'){
+    g.appendChild(mkS('path',{d:'M10,18.5 C10,18.5 1.5,13 1.5,7.5 A5,5,0,0,1,10,3.5 A5,5,0,0,1,18.5,7.5 C18.5,13 10,18.5 10,18.5Z',fill:'#2e7d32',stroke:'#1b5e20','stroke-width':0.5}));
+    g.appendChild(mkS('line',{x1:10,y1:5,x2:10,y2:18.5,stroke:'#1b5e20','stroke-width':1.1}));
+    [[6.5,9.5,10,7.5],[13.5,9.5,10,7.5],[5.5,13,10,11],[14.5,13,10,11]].forEach(([x1,y1,x2,y2])=>g.appendChild(mkS('line',{x1,y1,x2,y2,stroke:'#1b5e20','stroke-width':0.7})));
+  } else if(suit==='piros'){
+    g.appendChild(mkS('path',{d:'M10,17.5 L1.5,8.5 A4.8,4.8,0,0,1,10,4.5 A4.8,4.8,0,0,1,18.5,8.5 Z',fill:'#c62828'}));
+    g.appendChild(mkS('ellipse',{cx:7.5,cy:8,rx:2,ry:2.5,fill:'rgba(255,255,255,0.18)'}));
+  } else if(suit==='sarga'){
+    g.appendChild(mkS('path',{d:'M6.5,15 L5.5,9.5 Q5.5,4.5 10,4 Q14.5,4.5 14.5,9.5 L13.5,15 Z',fill:'#f9a825',stroke:'#e65100','stroke-width':0.5}));
+    g.appendChild(mkS('ellipse',{cx:10,cy:15,rx:5,ry:2,fill:'#e65100'}));
+    g.appendChild(mkS('line',{x1:10,y1:15.5,x2:10,y2:18,stroke:'#bf360c','stroke-width':1.4,'stroke-linecap':'round'}));
+    g.appendChild(mkS('circle',{cx:10,cy:18.5,r:1.2,fill:'#bf360c'}));
+    g.appendChild(mkS('path',{d:'M8.5,4 Q8.5,1.5 10,1.5 Q11.5,1.5 11.5,4',fill:'none',stroke:'#e65100','stroke-width':1.3,'stroke-linecap':'round'}));
+    g.appendChild(mkS('ellipse',{cx:8,cy:8,rx:1.5,ry:3,fill:'rgba(255,255,255,0.2)'}));
+  }
+  parent.appendChild(g);
+}
+
+function drawFigure(svg,card){
+  const col=SI[card.s].col, cx=27, g=mkS('g');
+  if(card.v==='K'){
+    g.appendChild(mkS('path',{d:`M${cx-7},26 L${cx-7},20 L${cx-4},23 L${cx},18 L${cx+4},23 L${cx+7},20 L${cx+7},26 Z`,fill:'#f9a825',stroke:'#e65100','stroke-width':0.5}));
+    g.appendChild(mkS('rect',{x:cx-7,y:26,width:14,height:3,rx:1,fill:'#f9a825'}));
+    g.appendChild(mkS('circle',{cx,cy:18,r:1.8,fill:'#ef5350'}));
+    g.appendChild(mkS('circle',{cx:cx-5,cy:21,r:1.2,fill:'#42a5f5'}));
+    g.appendChild(mkS('circle',{cx:cx+5,cy:21,r:1.2,fill:'#42a5f5'}));
+    g.appendChild(mkS('ellipse',{cx,cy:33,rx:6.5,ry:7.5,fill:'#ffd7a8'}));
+    g.appendChild(mkS('path',{d:`M${cx-5},36 Q${cx},38 ${cx+5},36`,fill:'#8d6e63',stroke:'#6d4c41','stroke-width':0.8}));
+    g.appendChild(mkS('path',{d:`M${cx-4},37 Q${cx-3},40 ${cx},41 Q${cx+3},40 ${cx+4},37`,fill:'#6d4c41'}));
+    g.appendChild(mkS('path',{d:`M${cx-10},40 L${cx-11},64 L${cx+11},64 L${cx+10},40 Q${cx},44 ${cx-10},40Z`,fill:col+'ee'}));
+    g.appendChild(mkS('rect',{x:cx-10,y:50,width:20,height:3,rx:1,fill:'#f9a825aa'}));
+    g.appendChild(mkS('line',{x1:cx+9,y1:35,x2:cx+9,y2:62,stroke:'#c9a227','stroke-width':2,'stroke-linecap':'round'}));
+    g.appendChild(mkS('circle',{cx:cx+9,cy:33.5,r:3.2,fill:'#f9a825'}));
+    g.appendChild(mkS('circle',{cx:cx+9,cy:33.5,r:1.5,fill:'#ef5350'}));
+    g.appendChild(mkS('line',{x1:cx-9,y1:43,x2:cx-9,y2:62,stroke:'#90a4ae','stroke-width':2}));
+    g.appendChild(mkS('line',{x1:cx-13,y1:46,x2:cx-5,y2:46,stroke:'#90a4ae','stroke-width':2}));
+  } else if(card.v==='F'){
+    g.appendChild(mkS('ellipse',{cx,cy:21,rx:9,ry:2.5,fill:'#37474f'}));
+    g.appendChild(mkS('rect',{x:cx-6,y:12,width:12,height:10,rx:1.5,fill:'#37474f'}));
+    g.appendChild(mkS('path',{d:`M${cx+5},12 Q${cx+18},5 ${cx+15},18`,fill:'none',stroke:'#ff7043','stroke-width':2,'stroke-linecap':'round'}));
+    g.appendChild(mkS('ellipse',{cx,cy:30,rx:6,ry:7,fill:'#ffd7a8'}));
+    g.appendChild(mkS('path',{d:`M${cx-4},32 Q${cx-2},31 ${cx},32 Q${cx+2},31 ${cx+4},32`,fill:'none',stroke:'#5d4037','stroke-width':1.3}));
+    g.appendChild(mkS('path',{d:`M${cx-9},37 L${cx-10},64 L${cx+10},64 L${cx+9},37 Q${cx},41 ${cx-9},37Z`,fill:col+'dd'}));
+    g.appendChild(mkS('line',{x1:cx-8,y1:40,x2:cx-8,y2:62,stroke:'#b0bec5','stroke-width':2.5}));
+    g.appendChild(mkS('line',{x1:cx-12,y1:44,x2:cx-4,y2:44,stroke:'#b0bec5','stroke-width':2}));
+    g.appendChild(mkS('path',{d:`M${cx-8},39 L${cx-6},36 L${cx-10},36 Z`,fill:'#b0bec5'}));
+  } else if(card.v==='A'){
+    g.appendChild(mkS('path',{d:`M${cx-6},22 Q${cx-6},11 ${cx+2},11 Q${cx+9},11 ${cx+9},18 L${cx+9},24 Z`,fill:'#78909c',stroke:'#546e7a','stroke-width':0.8}));
+    g.appendChild(mkS('rect',{x:cx-6,y:22,width:15,height:2.5,fill:'#546e7a'}));
+    [14,16.5,19].forEach(y=>g.appendChild(mkS('line',{x1:cx-3,y1:y,x2:cx+7,y2:y,stroke:'#455a64','stroke-width':0.6})));
+    g.appendChild(mkS('ellipse',{cx:cx+1.5,cy:31,rx:5.5,ry:6.5,fill:'#ffd7a8'}));
+    g.appendChild(mkS('rect',{x:cx-8,y:37,width:17,height:27,rx:2,fill:'#78909c'}));
+    g.appendChild(mkS('path',{d:`M${cx-14},40 L${cx-14},55 Q${cx-11},62 ${cx-8},58 L${cx-8},40 Z`,fill:col,stroke:SI[card.s].dark,'stroke-width':0.8}));
+    drawSuit(g,card.s,cx-11,49,9);
+    g.appendChild(mkS('line',{x1:cx+10,y1:16,x2:cx+10,y2:64,stroke:'#8d6e63','stroke-width':2,'stroke-linecap':'round'}));
+    g.appendChild(mkS('polygon',{points:`${cx+10},11 ${cx+7.5},17 ${cx+12.5},17`,fill:'#90a4ae'}));
+  }
+  svg.appendChild(g);
+}
+
+function buildCardSVG(card,lifted,W,H){
+  const svg=mkS('svg',{width:W,height:H,viewBox:'0 0 54 84'});
+  svg.style.cssText=`display:block;border-radius:6px;flex-shrink:0;cursor:pointer;user-select:none;transition:transform 0.15s,filter 0.15s;transform:${lifted?'translateY(-14px)':'translateY(0)'};filter:${lifted?'drop-shadow(0 0 8px gold) drop-shadow(0 0 16px rgba(249,168,37,0.6))':'drop-shadow(0 2px 4px rgba(0,0,0,0.35))'};`;
+  const isFace=['A','F','K'].includes(card.v), sc=SI[card.s];
+  svg.appendChild(mkS('rect',{width:54,height:84,rx:5,fill:lifted?'#fffce0':'#fdf6e3',stroke:'#c8b49a','stroke-width':0.4}));
+  svg.appendChild(mkS('rect',{x:2.5,y:2.5,width:49,height:79,rx:3.5,fill:'none',stroke:sc.col,'stroke-width':0.9}));
+  svg.appendChild(mkS('rect',{x:3.8,y:3.8,width:46.4,height:76.4,rx:2.5,fill:'none',stroke:sc.col+'44','stroke-width':0.5}));
+  [[5,5],[49,5],[5,79],[49,79]].forEach(([x,y])=>svg.appendChild(mkS('circle',{cx:x,cy:y,r:1.2,fill:sc.col+'66'})));
+  if(isFace){
+    svg.appendChild(mkS('rect',{x:3.5,y:3.5,width:47,height:77,rx:3,fill:sc.col+'11'}));
+    const topG=mkS('g');
+    const tv=mkS('text',{x:5,y:11,'font-size':8,'font-weight':'bold',fill:sc.col,'font-family':'Georgia,serif','text-anchor':'middle'}); tv.textContent=card.v; topG.appendChild(tv);
+    drawSuit(topG,card.s,5,17,8); svg.appendChild(topG);
+    drawFigure(svg,card);
+    const botG=mkS('g',{transform:'rotate(180,27,42)'});
+    const bv=mkS('text',{x:5,y:11,'font-size':8,'font-weight':'bold',fill:sc.col,'font-family':'Georgia,serif','text-anchor':'middle'}); bv.textContent=card.v; botG.appendChild(bv);
+    drawSuit(botG,card.s,5,17,8); svg.appendChild(botG);
+  } else {
+    const topG=mkS('g');
+    const tv=mkS('text',{x:5,y:11,'font-size':9,'font-weight':'bold',fill:sc.col,'font-family':'Georgia,serif','text-anchor':'middle'}); tv.textContent=card.v; topG.appendChild(tv);
+    drawSuit(topG,card.s,5,19,8); svg.appendChild(topG);
+    const botG=mkS('g',{transform:'rotate(180,27,42)'});
+    const bv=mkS('text',{x:5,y:11,'font-size':9,'font-weight':'bold',fill:sc.col,'font-family':'Georgia,serif','text-anchor':'middle'}); bv.textContent=card.v; botG.appendChild(bv);
+    drawSuit(botG,card.s,5,19,8); svg.appendChild(botG);
+    if(card.v==='Á'){drawSuit(svg,card.s,27,40,30);svg.appendChild(mkS('circle',{cx:27,cy:40,r:17,fill:'none',stroke:sc.col+'33','stroke-width':2}));}
+    else{
+      const pos={'7':[[27,42]],'8':[[27,25],[27,59]],'9':[[27,22],[27,42],[27,62]],'10':[[16,25],[38,25],[16,59],[38,59]]}[card.v]||[[27,42]];
+      const sz=pos.length<=2?14:12;
+      pos.forEach(([cx,cy])=>drawSuit(svg,card.s,cx,cy,sz));
+    }
+  }
+  return svg;
+}
+
+function buildBackSVG(W,H){
+  const svg=mkS('svg',{width:W,height:H,viewBox:'0 0 54 84'});
+  svg.style.cssText='display:block;border-radius:5px;flex-shrink:0;';
+  svg.appendChild(mkS('rect',{width:54,height:84,rx:5,fill:'#1a237e'}));
+  svg.appendChild(mkS('rect',{x:3,y:3,width:48,height:78,rx:3,fill:'none',stroke:'#3949ab','stroke-width':1.2}));
+  for(let x=8;x<50;x+=8)svg.appendChild(mkS('line',{x1:x,y1:5,x2:x,y2:79,stroke:'#3949ab','stroke-width':0.4}));
+  for(let y=10;y<79;y+=9)svg.appendChild(mkS('line',{x1:3,y1:y,x2:51,y2:y,stroke:'#3949ab','stroke-width':0.4}));
+  [[9,9],[45,9],[9,75],[45,75]].forEach(([cx,cy])=>{
+    [0,60,120,180,240,300].forEach(a=>{const r=a*Math.PI/180;svg.appendChild(mkS('line',{x1:cx,y1:cy,x2:cx+Math.cos(r)*5,y2:cy+Math.sin(r)*5,stroke:'#5c6bc0','stroke-width':0.8}));});
+    svg.appendChild(mkS('circle',{cx,cy,r:2,fill:'#7986cb'}));
+  });
+  const cx=27,cy=42;
+  [0,45,90,135,180,225,270,315].forEach(a=>{const r=a*Math.PI/180;svg.appendChild(mkS('line',{x1:cx,y1:cy,x2:cx+Math.cos(r)*8,y2:cy+Math.sin(r)*8,stroke:'#5c6bc0','stroke-width':0.8}));});
+  svg.appendChild(mkS('circle',{cx,cy,r:5,fill:'none',stroke:'#7986cb','stroke-width':1.2}));
+  svg.appendChild(mkS('circle',{cx,cy,r:2.5,fill:'#7986cb'}));
+  const t=mkS('text',{x:cx,y:cy+4,'font-size':6,'font-weight':'bold',fill:'#9fa8da','text-anchor':'middle','font-family':'Georgia,serif'});t.textContent='M';svg.appendChild(t);
+  return svg;
+}
+
+function renderCard(card,onClick,lifted,W=54,H=84){
+  const w=document.createElement('div'); w.style.cssText='display:inline-block;flex-shrink:0;';
+  if(onClick)w.addEventListener('click',onClick);
+  w.appendChild(buildCardSVG(card,lifted,W,H)); return w;
+}
+function renderBack(W=30,H=46){
+  const d=document.createElement('div'); d.style.cssText='display:inline-block;flex-shrink:0;';
+  d.appendChild(buildBackSVG(W,H)); return d;
+}
+
+// ═══ RENDER KERETRENDSZER ════════════════════════════════════
+function el(tag,attrs,children){
+  const e=document.createElement(tag);
+  if(attrs)Object.entries(attrs).forEach(([k,v])=>{if(k==='style')Object.assign(e.style,v);else if(k.startsWith('on'))e.addEventListener(k.slice(2).toLowerCase(),v);else e.setAttribute(k,v);});
+  if(children)children.forEach(c=>{if(c!=null)e.appendChild(typeof c==='string'?document.createTextNode(c):c);});
+  return e;
+}
+function div(s,ch){return el('div',{style:s},ch);}
+function btn(s,cb,ch){return el('button',{style:s,onClick:cb},ch);}
+function inp(ph,val,onCh){const i=el('input',{type:'text',placeholder:ph});i.value=val||'';i.addEventListener('input',e=>onCh(e.target.value));return i;}
+
+// ═══ RENDER ══════════════════════════════════════════════════
+function render(){
+  const app=document.getElementById('app'); app.innerHTML='';
+  if(netPhase==='lobby')      {app.appendChild(rLobby());return;}
+  if(netPhase==='hosting')    {app.appendChild(rHosting());return;}
+  if(netPhase==='ready')      {app.appendChild(rHosting());return;}
+  if(netPhase==='joining')    {app.appendChild(rJoining());return;}
+  if(netPhase==='waiting')    {app.appendChild(rWaiting());return;}
+  if(netPhase==='disconnected'){app.appendChild(rDisconn());return;}
+  // playing
+  app.appendChild(rGame());
+}
+
+const baseCard={minHeight:'100vh',background:`linear-gradient(160deg,${DG} 0%,${G} 60%,#2e7d32 100%)`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px',gap:'14px'};
+
+function rLobby(){
+  let n='',c='';
+  const wrap=div(baseCard,[
+    el('div',{style:{fontSize:'56px'}},['🃏']),
+    el('h1',{style:{fontSize:'26px',letterSpacing:'4px',textShadow:'2px 2px 8px rgba(0,0,0,0.5)'}},['PREFERANSZ']),
+    el('p',{style:{color:'#a5d6a7',fontSize:'12px',textAlign:'center',lineHeight:'1.7'}},['Többjátékos · 3 ember · különböző hálózatokról']),
+    netError?div({color:'#ff8a65',background:'rgba(229,57,53,0.15)',border:'1px solid rgba(229,57,53,0.4)',borderRadius:'8px',padding:'10px',fontSize:'13px',textAlign:'center',width:'100%',maxWidth:'320px'},[netError]):null,
+    div({width:'100%',maxWidth:'320px',display:'flex',flexDirection:'column',gap:'10px'},[
+      div({fontSize:'12px',color:'#81c784',marginBottom:'2px'},['Neved:']),
+      inp('Pl. Péter', n, v=>n=v),
+      div({height:'14px'}),
+      btn({background:'#f9a825',color:'#1a1a1a',border:'none',borderRadius:'10px',padding:'13px',fontSize:'16px',fontWeight:'bold',width:'100%',boxShadow:'0 4px 16px rgba(249,168,37,0.4)'},
+        ()=>{if(!n.trim()){alert('Írd be a nevedet!');return;}doHost(n.trim());},['🏠 Új játék indítása (Te vagy a gazda)']),
+      div({textAlign:'center',color:'rgba(255,255,255,0.3)',fontSize:'12px'},['— vagy —']),
+      inp('Szobakód (6 betű)', c, v=>c=v.toUpperCase()),
+      btn({background:'rgba(255,255,255,0.12)',color:'white',border:'1px solid rgba(255,255,255,0.3)',borderRadius:'10px',padding:'13px',fontSize:'16px',width:'100%'},
+        ()=>{if(!n.trim()){alert('Írd be a nevedet!');return;}if(!c.trim()){alert('Írd be a szobakódot!');return;}doJoin(n.trim(),c.trim());},['🔗 Csatlakozás kóddal']),
+    ]),
+  ]);
+  return wrap;
+}
+
+function rHosting(){
+  const joined=joinedCount;
+  return div(baseCard,[
+    el('div',{style:{fontSize:'44px'}},['🏠']),
+    el('h2',{style:{fontSize:'20px',color:'#ffcc02',marginBottom:'4px'}},['Várakozás a barátokra...']),
+    el('p',{style:{color:'#a5d6a7',fontSize:'12px',textAlign:'center'}},['Küldd el ezt a kódot a 2 barátodnak:']),
+    el('div',{class:'code',onClick:()=>{
+      if(navigator.clipboard)navigator.clipboard.writeText(roomCode).then(()=>alert('Kód másolva!')).catch(()=>{});
+    }},[roomCode]),
+    el('p',{style:{color:'rgba(255,255,255,0.4)',fontSize:'11px'}},[' (koppints a másoláshoz)']),
+    div({background:'rgba(0,0,0,0.3)',borderRadius:'12px',padding:'14px 20px',width:'100%',maxWidth:'300px'},[
+      div({fontSize:'12px',color:'#81c784',marginBottom:'10px',textAlign:'center',letterSpacing:'1px'},['CSATLAKOZOTT JÁTÉKOSOK']),
+      ...[0,1,2].map(i=>div({display:'flex',alignItems:'center',gap:'10px',padding:'6px 0',borderBottom:i<2?'1px solid rgba(255,255,255,0.08)':'none'},[
+        div({width:'24px',height:'24px',borderRadius:'50%',background:i<joinedCount+1?'#4caf50':'rgba(255,255,255,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'},[i<joinedCount+1?'✓':'○']),
+        div({fontSize:'13px',color:i<joinedCount+1?'white':'rgba(255,255,255,0.3)'},[i===0?pNames[0]+' (Te – gazda)':pNames[i]||`Vendég ${i}`]),
+      ])),
+    ]),
+    joined===2
+      ? btn({background:'#4caf50',color:'white',border:'none',borderRadius:'50px',padding:'14px 40px',fontSize:'17px',fontWeight:'bold',boxShadow:'0 4px 20px rgba(76,175,80,0.5)',marginTop:'8px'},
+          ()=>{netPhase='playing';startRound();},['▶ Játék indítása!'])
+      : div({fontSize:'12px',color:'#a5d6a7',textAlign:'center'},[`Még ${2-joined} játékos hiányzik...`]),
+    btn({background:'none',border:'none',color:'rgba(255,255,255,0.3)',fontSize:'12px',marginTop:'8px'},
+      ()=>{netPhase='lobby';joinedCount=0;pConns=[null,null,null];if(peer){peer.destroy();peer=null;}render();},[' ← Vissza']),
+  ]);
+}
+
+function rJoining(){
+  return div(baseCard,[
+    el('div',{style:{fontSize:'44px'}},['⏳']),
+    el('h2',{style:{fontSize:'20px',color:'#ffcc02'}},['Csatlakozás...']),
+    el('p',{style:{color:'#a5d6a7',fontSize:'13px'}},['Kapcsolódás a gazdához...']),
+    btn({background:'none',border:'none',color:'rgba(255,255,255,0.3)',fontSize:'12px',marginTop:'20px'},
+      ()=>{netPhase='lobby';if(peer){peer.destroy();peer=null;}render();},[' ← Mégse']),
+  ]);
+}
+
+function rWaiting(){
+  return div(baseCard,[
+    el('div',{style:{fontSize:'44px'}},['🕐']),
+    el('h2',{style:{fontSize:'20px',color:'#ffcc02'}},['Csatlakozva!']),
+    el('p',{style:{color:'#a5d6a7',fontSize:'13px',textAlign:'center',lineHeight:'1.7'}},['Te vagy: '+pNames[myIndex]+'\nVárakozás, amíg a gazda elindítja a játékot...']),
+    div({background:'rgba(0,0,0,0.3)',borderRadius:'12px',padding:'14px 20px',width:'100%',maxWidth:'300px'},[
+      ...[0,1,2].map(i=>div({display:'flex',alignItems:'center',gap:'10px',padding:'5px 0'},[
+        div({width:'20px',height:'20px',borderRadius:'50%',background:pNames[i]&&pNames[i]!==`Vendég ${i}`?'#4caf50':'rgba(255,255,255,0.1)',fontSize:'11px',display:'flex',alignItems:'center',justifyContent:'center'},[i===0?'👑':i===myIndex?'⭐':'○']),
+        div({fontSize:'13px',color:i===myIndex?'#ffcc02':'white'},[pNames[i]+(i===0?' (gazda)':'')+(i===myIndex?' (Te)':'')]),
+      ])),
+    ]),
+  ]);
+}
+
+function rDisconn(){
+  return div(baseCard,[
+    el('div',{style:{fontSize:'44px'}},['📵']),
+    el('h2',{style:{fontSize:'20px',color:'#ef9a9a'}},['Kapcsolat megszakadt']),
+    el('p',{style:{color:'#a5d6a7',fontSize:'13px',textAlign:'center'}},['Valamelyik játékos kilépett vagy megszakadt a kapcsolat.']),
+    btn({background:'#f9a825',color:'#1a1a1a',border:'none',borderRadius:'50px',padding:'12px 32px',fontSize:'15px',fontWeight:'bold',marginTop:'10px'},
+      ()=>{netPhase='lobby';joinedCount=0;pConns=[null,null,null];hostConn=null;if(peer){peer.destroy();peer=null;}render();},[' Vissza a menübe']),
+  ]);
+}
+
+function rGame(){
+  const s=state;
+  const showTrick=['play','between','evaluating'].includes(s.phase);
+  // A saját lapok
+  const myHand=SUITS.flatMap(su=>s.hands[myIndex].filter(c=>c.s===su).sort((a,b)=>VR[a.v]-VR[b.v]));
+  // A másik két játékos (nem én)
+  const others=[0,1,2].filter(i=>i!==myIndex);
+  const isMyTurn=(s.phase==='play'&&s.curP===myIndex)||(s.phase==='bid'&&s.bidder===myIndex)||(s.phase==='discard'&&s.bidWinner===myIndex)||(s.phase==='selectGame'&&s.bidWinner===myIndex);
+
+  const children=[];
+
+  // FEJLÉC
+  children.push(div({background:'rgba(0,0,0,0.55)',padding:'7px 12px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:'0'},[
+    div({display:'flex',alignItems:'center',gap:'8px'},[
+      div({fontSize:'10px',color:isMyTurn?'#ffee58':'#81c784'},[ isMyTurn?'🎯 Te jössz!':netPhase]),
+    ]),
+    div({display:'flex',gap:'14px'},
+      [0,1,2].map(i=>div({textAlign:'center'},[
+        div({fontSize:'8px',color:i===myIndex?'#ffcc02':'#81c784'},[pNames[i]+(i===myIndex?' ★':'')]),
+        div({fontSize:'15px',fontWeight:'bold',color:s.scores[i]>=0?'#ffee58':'white'},[s.scores[i].toString()]),
+      ]))
+    ),
+  ]));
+
+  // MÁS JÁTÉKOSOK KEZEI (fent)
+  children.push(div({display:'flex',justifyContent:'space-around',padding:'8px 12px 4px',gap:'8px',flexShrink:'0'},
+    others.map(pi=>div({flex:'1',textAlign:'center'},[
+      div({fontSize:'10px',color:'#a5d6a7',marginBottom:'4px'},[
+        pNames[pi]+(showTrick&&s.curP===pi?' 🎯':'')+' · '+s.tw[pi]+' vitele'
+      ]),
+      div({display:'flex',justifyContent:'center',gap:'2px',flexWrap:'wrap'},
+        s.hands[pi].map(()=>renderBack(22,33))
+      ),
+    ]))
+  ));
+
+  // TALON
+  if(s.showTalon&&s.talon.length>0){
+    children.push(div({textAlign:'center',padding:'6px 0',borderTop:'1px solid rgba(255,255,255,0.1)',borderBottom:'1px solid rgba(255,255,255,0.1)',flexShrink:'0'},[
+      div({fontSize:'10px',color:'#ffcc02',marginBottom:'6px'},['— Talon —']),
+      div({display:'flex',justifyContent:'center',gap:'12px'},s.talon.map(c=>renderCard(c,null,false,44,68))),
+    ]));
+  }
+
+  // ASZTAL
+  if(showTrick){
+    children.push(div({margin:'4px 10px',background:'rgba(0,0,0,0.22)',borderRadius:'10px',padding:'6px 10px',flexShrink:'0'},[
+      div({fontSize:'10px',color:'#a5d6a7',marginBottom:'4px',display:'flex',justifyContent:'space-between'},[
+        el('span',{},['Menet '+Math.min(10,s.tw[0]+s.tw[1]+s.tw[2]+s.trick.length)+'/10']),
+        el('span',{},others.map(i=>`${pNames[i][0]}:${s.tw[i]} `).join('· ')+`Te:${s.tw[myIndex]}`),
+      ]),
+      div({display:'flex',justifyContent:'center',gap:'14px',minHeight:'76px',alignItems:'center'},
+        s.trick.length===0?[div({color:'rgba(255,255,255,0.2)',fontSize:'12px'},['— asztal üres —'])]:
+        s.trick.map(t=>div({textAlign:'center'},[
+          div({fontSize:'9px',color:t.pl===myIndex?'#ffcc02':'#a5d6a7',marginBottom:'3px'},[pNames[t.pl]+(t.pl===myIndex?' (Te)':'')]),
+          renderCard(t.card,null,false,44,68),
+        ]))
+      ),
+    ]));
+  }
+
+  // ÜZENET
+  children.push(div({background:isMyTurn?'rgba(249,168,37,0.15)':'rgba(0,0,0,0.22)',margin:'3px 10px',borderRadius:'8px',padding:'7px 14px',fontSize:'13px',textAlign:'center',color:isMyTurn?'#ffee58':'#fff9c4',minHeight:'32px',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:'1.4',flexShrink:'0',border:isMyTurn?'1px solid rgba(249,168,37,0.4)':'none'},[s.msg||'...']));
+
+  // JÁTÉK BADGE
+  if(s.game&&showTrick){
+    children.push(div({textAlign:'center',margin:'2px 0',flexShrink:'0'},[
+      el('span',{style:{background:'rgba(249,168,37,0.12)',border:'1px solid rgba(249,168,37,0.3)',borderRadius:'20px',padding:'3px 12px',fontSize:'10px',color:'#ffcc02'}},
+        [s.game.n+(s.game.trump?' · tromf: '+SI[s.game.trump].n:' · nincs tromf')+' · cél:'+s.game.tgt+(s.bidWinner!==null?' · '+pNames[s.bidWinner]:'')])
+    ]));
+  }
+
+  // ═══ AKCIÓ GOMBOK ═══════════════════════════════════════
+  // LICIT
+  if(s.phase==='bid'&&s.bidder===myIndex){
+    children.push(div({padding:'6px 10px',flexShrink:'0'},[
+      div({fontSize:'11px',color:'#a5d6a7',textAlign:'center',marginBottom:'6px'},[s.highBid?`Jelenlegi: ${s.highBid} (${GAMES.find(g=>g.id>=s.highBid)?.n})`:'Nyitó licit – mennyit mondasz?']),
+      div({display:'flex',flexWrap:'wrap',gap:'5px',justifyContent:'center',marginBottom:'6px'},
+        GAMES.filter(g=>g.id>s.highBid).map(g=>btn({background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.25)',color:'white',borderRadius:'8px',padding:'7px 10px',fontSize:'11px'},()=>myBid(g.id),[g.id+'·'+g.n]))),
+      btn({width:'100%',background:'rgba(229,57,53,0.2)',border:'1px solid rgba(229,57,53,0.4)',color:'#ef9a9a',borderRadius:'8px',padding:'9px',fontSize:'14px'},()=>myBid(null),['Passz']),
+    ]));
+  } else if(s.phase==='bid'){
+    children.push(div({padding:'6px 10px',textAlign:'center',flexShrink:'0'},[
+      div({display:'inline-block',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:'8px',padding:'7px 18px',fontSize:'11px',color:'#81c784'},[pNames[s.bidder]+' gondolkodik...']),
+    ]));
+  }
+
+  // JÁTÉKVÁLASZTÁS
+  if(s.phase==='selectGame'&&s.bidWinner===myIndex){
+    children.push(div({padding:'6px 10px',flexShrink:'0'},[
+      div({fontSize:'11px',color:'#a5d6a7',textAlign:'center',marginBottom:'6px'},['Melyik játékot játszod? (min: '+s.highBid+')']),
+      div({display:'flex',flexWrap:'wrap',gap:'5px',justifyContent:'center'},
+        GAMES.filter(g=>g.id>=s.highBid).map(g=>btn({background:'rgba(249,168,37,0.15)',border:'1px solid rgba(249,168,37,0.4)',color:'#ffcc02',borderRadius:'8px',padding:'9px 14px',fontSize:'12px',fontWeight:'bold'},()=>myPickGame(g),[g.n]))),
+    ]));
+  } else if(s.phase==='selectGame'){
+    children.push(div({padding:'4px 10px',textAlign:'center',flexShrink:'0',fontSize:'11px',color:'#81c784'},[pNames[s.bidWinner]+' választ játékot...']));
+  }
+
+  // ELDOBÁS
+  if(s.phase==='discard'&&s.bidWinner===myIndex){
+    children.push(div({padding:'3px 10px',textAlign:'center',flexShrink:'0',fontSize:'12px',color:'#ff8a65'},['👆 Koppints a lapra az eldobáshoz ('+(myHand.length-10)+' kell)']));
+  } else if(s.phase==='discard'){
+    children.push(div({padding:'4px 10px',textAlign:'center',flexShrink:'0',fontSize:'11px',color:'#81c784'},[pNames[s.bidWinner]+' eldob 2 lapot...']));
+  }
+
+  // NAPLÓ
+  children.push(div({margin:'3px 10px',padding:'4px 10px',background:'rgba(0,0,0,0.12)',borderRadius:'6px',overflow:'hidden',maxHeight:'42px',flexShrink:'0'},
+    s.log.slice(0,3).map((l,i)=>div({fontSize:'10px',color:i===0?'#a5d6a7':'rgba(165,214,167,0.3)',lineHeight:'1.4'},['• '+l]))
+  ));
+
+  // SAJÁT LAPOK
+  children.push(div({marginTop:'auto',padding:'6px 8px 18px',flexShrink:'0'},[
+    div({display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'},[
+      div({fontSize:'10px',color:isMyTurn?'#ffcc02':'#a5d6a7'},['Te ('+myHand.length+' lap)'+(isMyTurn?' 🎯':'')]),
+      div({fontSize:'10px',color:'#81c784'},[s.tw[myIndex]+' viteled']),
+    ]),
+    div({overflowX:'auto',paddingBottom:'4px'},[ // scrollable ha sok lap
+      div({display:'flex',gap:'3px',flexWrap:'wrap',justifyContent:'center'},
+        myHand.map(card=>{
+          const isLifted=s.liftedCard===card.id;
+          const canAct=(s.phase==='play'&&s.curP===myIndex)||(s.phase==='discard'&&s.bidWinner===myIndex);
+          return renderCard(card,canAct?()=>{
+            if(s.phase==='discard')myDiscard(card.id);
+            else myPlay(card);
+          }:null,isLifted,48,74);
+        })
+      ),
+    ]),
+    s.liftedCard?div({textAlign:'center',marginTop:'4px',fontSize:'11px',color:'#ffcc02'},
+      [s.phase==='discard'?'Koppints újra → eldob!':'Koppints újra → lerak!']):null,
+  ]));
+
+  // EREDMÉNY OVERLAY
+  if(s.phase==='result'){
+    const emoji=s.resultMsg.startsWith('✓')?'🏆':s.resultMsg.startsWith('✗')?'💀':'🃏';
+    children.push(div({position:'fixed',top:'0',left:'0',right:'0',bottom:'0',background:'rgba(0,0,0,0.88)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:'50'},[
+      div({background:`linear-gradient(140deg,${DG},${G})`,border:'2px solid #4caf50',borderRadius:'18px',padding:'28px 24px',maxWidth:'300px',width:'90%',textAlign:'center'},[
+        div({fontSize:'36px',marginBottom:'8px'},[emoji]),
+        el('h2',{style:{fontSize:'17px',margin:'0 0 10px',color:'#ffcc02',lineHeight:'1.3'}},[s.resultMsg||'Kör vége']),
+        div({background:'rgba(0,0,0,0.3)',borderRadius:'10px',padding:'12px 0',margin:'14px 0',display:'flex',justifyContent:'space-around'},
+          [0,1,2].map(i=>div({textAlign:'center'},[
+            div({fontSize:'9px',color:i===myIndex?'#ffcc02':'#81c784',marginBottom:'2px'},[pNames[i]+(i===myIndex?' ★':'')]),
+            div({fontSize:'24px',fontWeight:'bold',color:s.scores[i]>=0?'#ffee58':'white'},[s.scores[i].toString()]),
+          ]))
+        ),
+        isHost
+          ? btn({background:'#f9a825',color:'#1a1a1a',border:'none',borderRadius:'50px',padding:'12px 36px',fontSize:'15px',fontWeight:'bold',marginBottom:'10px',width:'100%'},startRound,['▶ Következő kör'])
+          : div({fontSize:'13px',color:'#a5d6a7',padding:'10px',marginBottom:'10px'},['⏳ Gazda indítja a következő kört...']),
+        btn({background:'transparent',border:'1px solid rgba(255,255,255,0.2)',color:'rgba(255,255,255,0.5)',borderRadius:'50px',padding:'8px 20px',fontSize:'12px',width:'100%'},()=>{netPhase='lobby';joinedCount=0;pConns=[null,null,null];hostConn=null;if(peer){peer.destroy();peer=null;}render();},[' ← Kilépés']),
+      ]),
+    ]));
+  }
+
+  return div({minHeight:'100vh',background:`linear-gradient(160deg,${DG} 0%,${G} 70%)`,display:'flex',flexDirection:'column',maxWidth:'480px',margin:'0 auto',position:'relative'},children);
+}
+
+// Indítás
+try{render();}catch(e){document.getElementById('app').innerHTML='<div style="color:#ff8a65;padding:24px;text-align:center;font-family:Georgia,serif;"><b>Hiba:</b><br>'+e.message+'</div>';}
+</script>
+</body>
+</html>
