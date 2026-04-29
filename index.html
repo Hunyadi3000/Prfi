@@ -72,6 +72,11 @@ let joinedCount=0;
 let myNameInput='', joinCodeInput='';
 let netError='';
 let showRules=false;
+let jatekModeActive=false; // Ha true, a következő licit "Játék" módban megy (talon rejtett, dupla)
+
+// ═══ BOT KONFIGURÁCIÓ ═══════════════════════════════════════
+let botConfig=[false,false]; // botConfig[0]=játékos1 bot?, botConfig[1]=játékos2 bot?
+let botDifficulty='normal'; // 'easy' | 'normal' | 'hard'
 
 function genCode(){return Math.random().toString(36).slice(2,8).toUpperCase();}
 
@@ -81,6 +86,28 @@ function doHost(name){
   roomCode=genCode();
   netPhase='hosting';
   _makePeer(roomCode);
+}
+
+function startWithBots(name, bot1, bot2, diff){
+  myNameInput=name;
+  isHost=true; myIndex=0; netError='';
+  botConfig=[bot1,bot2];
+  botDifficulty=diff||'normal';
+  const botNames=['Koppány bot','Béla bot'];
+  pNames=[name, bot1?botNames[0]:'Vendég 1', bot2?botNames[1]:'Vendég 2'];
+  if(bot1&&bot2){
+    // Teljesen bot játék – nincs hálózat
+    joinedCount=2;
+    netPhase='playing';
+    startRound();
+  } else {
+    // 1 emberi partner kell – normál host flow, bot töltőképernyőn is látszik
+    joinedCount=bot1?1:0; // ha bot1=false, akkor 0 csatlakozott
+    if(bot2){ joinedCount=1; } // bot2 már "csatlakozott"
+    roomCode=genCode();
+    netPhase='hosting';
+    _makePeer(roomCode);
+  }
 }
 
 function _makePeer(id){
@@ -149,8 +176,9 @@ function sendAction(action){
 }
 function _handleAction(action,fromIdx){
   if(!isHost)return;
+  if(fromIdx>0&&botConfig[fromIdx-1])return; // bot saját maga cselekszik
   const s=state;
-  if(action.kind==='bid'&&s.phase==='bid'&&s.bidder===fromIdx){processBid(fromIdx,action.amount);}
+  if(action.kind==='bid'&&s.phase==='bid'&&s.bidder===fromIdx){processBid(fromIdx,action.amount,action.isJatek||false);}
   else if(action.kind==='play'&&s.phase==='play'&&s.curP===fromIdx){
     const card=s.hands[fromIdx].find(c=>c.id===action.cardId);
     if(card)_doPlay(fromIdx,card);
@@ -192,11 +220,12 @@ let state={
   passCount:0, // körpasszok száma
   dealerIdx:0, // ki az osztó
   startScore:-10,
-  round:0
+  round:0,
+  isJatekRound:false // Ha true: talon rejtett, pontok duplán számolnak
 };
 
 function addLog(m){state.log=[m,...state.log].slice(0,20);}
-function after(){render();broadcastState();}
+function after(){render();broadcastState();_scheduleBots();}
 
 function startRound(){
   if(!isHost)return;
@@ -227,20 +256,35 @@ function startRound(){
     liftedCard:null,
     resultMsg:'',
     round:r,
-    trickHistory:[], // [{winner, trickNum}] – Mizer/Pikkoló ellenőrzéshez
+    trickHistory:[],
     lastTrickWinner:null,
+    isJatekRound:false,
     msg:`${pNames[firstBidder]} licitál...`
   };
   after();
 }
 
 // ═══ LICITÁLÁS ══════════════════════════════════════════════
-function processBid(pl,amount){
+function processBid(pl,amount,isJatek){
   const np=[...state.passed];
   let nHB=state.highBid,nHBr=state.highBidder,nAct=state.activeCnt;
   if(amount){
-    nHB=amount; nHBr=pl;
-    addLog(`${pNames[pl]}: ${amount} – ${GAMES.find(g=>g.id===amount)?.n||''}`);
+    // "Játék" módban: talon rejtett, dupla pont – de csak ha ténylegesen ugrik
+    if(isJatek&&amount>nHB+1){
+      // Érvényes ugró licit Játék módban
+      nHB=amount; nHBr=pl;
+      addLog(`${pNames[pl]}: JÁTÉK – ${amount} (${GAMES.find(g=>g.id===amount)?.n||''}) – talon rejtett, dupla!`);
+      // Jelöljük a state-ben hogy ez "Játék" körnek számít
+      state={...state,isJatekRound:true};
+    } else if(!isJatek&&amount===nHB+1){
+      // Normál +1 licit
+      nHB=amount; nHBr=pl;
+      addLog(`${pNames[pl]}: ${amount} – ${GAMES.find(g=>g.id===amount)?.n||''}`);
+    } else if(amount>nHB){
+      // Ugró licit Játék gomb nélkül: nem engedjük
+      state={...state,msg:'⚠️ Csak egyesével emelhetsz! Nagyobb ugráshoz nyomd meg a 🎯 Játék gombot!'};
+      after(); return;
+    }
   } else {
     np[pl]=true; nAct--;
     addLog(`${pNames[pl]}: Passz`);
@@ -297,9 +341,14 @@ function _resolveAuction(winner,winBid){
     setTimeout(()=>_playPassRound(),2000);
     return;
   }
-  state={...state,bidWinner:winner,showTalon:true};
-  addLog(`${pNames[winner]} nyerte a licitet (${winBid} – ${GAMES.find(g=>g.id>=winBid)?.n})`);
-  state={...state,msg:`${pNames[winner]} megnézi a talont! Válasszon játékot.`,phase:'selectGame'};
+  state={...state,bidWinner:winner,showTalon:!state.isJatekRound};
+  addLog(`${pNames[winner]} nyerte a licitet (${winBid} – ${GAMES.find(g=>g.id>=winBid)?.n})${state.isJatekRound?' [JÁTÉK – talon rejtett, dupla]':''}`);
+  if(state.isJatekRound){
+    // Játék kör: talon REJTETT, egyből játékot választ a talon nélkül
+    state={...state,msg:`🎯 JÁTÉK KÖR! ${pNames[winner]} talon nélkül választ játékot. (Dupla pont + dupla pince!)`,phase:'selectGame'};
+  } else {
+    state={...state,msg:`${pNames[winner]} megnézi a talont! Válasszon játékot.`,phase:'selectGame'};
+  }
   after();
 }
 
@@ -324,10 +373,25 @@ function _playPassRound(){
 function _doPickGame(g){
   const nh=state.hands.map(h=>[...h]);
   const bw=state.bidWinner;
-  nh[bw]=[...nh[bw],...state.talon];
-  addLog(`Játék: ${g.n} (${pNames[bw]})`);
-  state={...state,game:g,hands:nh,showTalon:false,liftedCard:null,
-    phase:'discard',msg:`${pNames[bw]} eldob 2 lapot...`};
+  const isJatek=state.isJatekRound;
+  if(!isJatek){
+    // Normál: felveszi a talont
+    nh[bw]=[...nh[bw],...state.talon];
+  }
+  const modG=isJatek?{...g,id:g.id,jatekBid:true}:g; // jelöljük ha Játék kör
+  addLog(`Játék: ${g.n} (${pNames[bw]})${isJatek?' [JÁTÉK – talon rejtett, dupla]':''}`);
+  if(isJatek){
+    // Talon rejtett marad, nincs eldobás – egyből játszunk
+    let sp;
+    if(g.tp==='color') sp=(bw+1)%3;
+    else if(g.tp==='preferansz') sp=(bw+1)%3;
+    else sp=((bw-1+3)%3);
+    state={...state,game:modG,hands:nh,showTalon:false,liftedCard:null,
+      curP:sp,phase:'play',msg:`🎯 JÁTÉK: ${g.n} (dupla) – ${pNames[sp]} kezd!`};
+  } else {
+    state={...state,game:modG,hands:nh,showTalon:false,liftedCard:null,
+      phase:'discard',msg:`${pNames[bw]} eldob 2 lapot...`};
+  }
   after();
 }
 
@@ -342,6 +406,9 @@ function _doDiscard(cardId){
     let sp;
     if(g.tp==='color'){
       sp=(state.dealerIdx+1)%3;
+    } else if(g.tp==='preferansz'){
+      // Preferansz: licitnyertes 2. lapot tesz, az ellenfél kezd
+      sp=(bw+1)%3;
     } else {
       sp=((bw-1)+3)%3;
     }
@@ -400,7 +467,8 @@ function _doPlay(pl,card){
   const w=_trickWinner(nt,state.game?.trump,state.game?.tp);
   const nTW=[...state.tw]; nTW[w]++;
   const trickNum=nTW[0]+nTW[1]+nTW[2]; // hányadik menet végzett
-  const nHistory=[...(state.trickHistory||[]),{winner:w,trickNum}];
+  const leadSuit=nt[0]?.card?.s||null;
+  const nHistory=[...(state.trickHistory||[]),{winner:w,trickNum,leadSuit}];
   addLog(`${pNames[w]} viszi → [${nTW.map((t,i)=>pNames[i][0]+':'+t).join(' ')}]`);
   state={...state,tw:nTW,lastTrickWinner:w,trickHistory:nHistory};
 
@@ -453,10 +521,17 @@ function _evalGame(finalTW){
     addLog(resultText);
   } else {
     let won=false;
-    const gameVal=g.id; // Korai liciten már dupla van benne
+    const isJatek=state.isJatekRound||state.game?.jatekBid||false;
+    const baseVal=g.id;
+    const gameVal=isJatek?baseVal*2:baseVal; // Korai liciten már dupla van benne; Játék körben is dupla
 
-    if(g.tp==='color'||g.tp==='szanadu'||g.tp==='preferansz'){
+    if(g.tp==='color'||g.tp==='szanadu'){
       won=got>=g.tgt;
+    } else if(g.tp==='preferansz'){
+      // Preferansz: min. 6 PIROS vitel kell a licitnyertesnek (más vitel is lehet, nincs tromf)
+      const pirosWins=(state.trickHistory||[]).filter(t=>t.winner===bw&&t.leadSuit==='piros').length;
+      won=pirosWins>=6;
+      addLog('Piros vitelei ('+pNames[bw]+'): '+pirosWins+'/6 kell');
     } else if(g.tp==='betli'){won=got===0;}
     else if(g.tp==='mizer'){won=got===1&&!_mizerFirstOrLast(finalTW,bw);}
     else if(g.tp==='pikkolo'){won=got===2&&_pikkoloValid(bw);}
@@ -532,13 +607,382 @@ function _calcFinalScore(pl){
 }
 
 // ═══ DECK ═════════════════════════════════════════════════
+
+// ═══ BOT AI MOTOR ════════════════════════════════════════════
+// A bot a saját kezét ismeri + a játszott lapokat + a tromfot
+
+function _botTick(){
+  if(!isHost) return;
+  const s=state;
+  // Meghatározza, hogy melyik bot lép
+  [1,2].forEach(pi=>{
+    if(!botConfig[pi-1]) return;
+    setTimeout(()=>_botAct(pi), 900 + Math.random()*600);
+  });
+}
+
+function _botAct(pi){
+  if(!isHost) return;
+  const s=state;
+  const hand=s.hands[pi];
+  if(!hand||hand.length===0) return;
+
+  if(s.phase==='bid'&&s.bidder===pi){
+    _botBid(pi);
+  } else if(s.phase==='selectGame'&&s.bidWinner===pi){
+    _botPickGame(pi);
+  } else if(s.phase==='discard'&&s.bidWinner===pi){
+    _botDiscard(pi);
+  } else if(s.phase==='play'&&s.curP===pi){
+    _botPlay(pi);
+  }
+}
+
+// ── Bot licit ───────────────────────────────────────────────
+function _botBid(pi){
+  const hand=state.hands[pi];
+  const s=state;
+  const bid=_botCalcBid(hand, s.highBid);
+  // Bot csak +1-et emelhet normál licitben
+  if(bid!==null&&bid>s.highBid+1){
+    // Bot ugrana, de csak +1-et tehet (bot nem nyom Játék gombot)
+    processBid(pi, s.highBid+1, false);
+  } else {
+    processBid(pi, bid, false);
+  }
+}
+
+function _botCalcBid(hand, currentHigh){
+  // Pontozás: lapok erőssége alapján
+  const suitCounts={};
+  const suitStrength={};
+  SUITS.forEach(su=>{
+    const cards=hand.filter(c=>c.s===su);
+    suitCounts[su]=cards.length;
+    suitStrength[su]=cards.reduce((s,c)=>s+VR[c.v],0);
+  });
+
+  // Legjobb tromfszín meghatározása
+  let bestSuit=null, bestScore=0;
+  SUITS.forEach(su=>{
+    // Súlyozás: lapszám + erő + ászok/királyok
+    const cnt=suitCounts[su];
+    const str=suitStrength[su];
+    const hasAce=hand.some(c=>c.s===su&&c.v==='Á');
+    const hasKing=hand.some(c=>c.s===su&&c.v==='K');
+    const score=cnt*3 + str*0.5 + (hasAce?4:0) + (hasKing?2:0);
+    if(score>bestScore){bestScore=score;bestSuit=su;}
+  });
+
+  // Összesített kézérték
+  const totalStr=hand.reduce((s,c)=>s+VR[c.v],0);
+  const highCards=hand.filter(c=>['K','Á'].includes(c.v)).length;
+  const aces=hand.filter(c=>c.v==='Á').length;
+
+  // Döntési logika
+  const gameMapping={zold:2,sarga:3,piros:4,makk:5};
+  const colorBid=bestSuit?gameMapping[bestSuit]:2;
+
+  // Betli esély: kevés magas lap + gyenge kezek
+  const canBetli=totalStr<15&&highCards<=1&&aces===0;
+  // Mizer: 1 magas lap, rest alacsony
+  const canMizer=highCards<=2&&aces<=1&&totalStr<22;
+  // Preferansz: LEGALÁBB 6 piros lap kell + minimum 3 magas piros (F/K/Á)
+  // mert 6 piros vitelt kell nyerni tromf nélkül
+  const pirosInHand=hand.filter(c=>c.s==='piros');
+  const pirosStr=pirosInHand.reduce((s,c)=>s+VR[c.v],0);
+  const pirosHighCards=pirosInHand.filter(c=>['F','K','Á'].includes(c.v)).length;
+  const canPreferansz=pirosInHand.length>=6&&pirosHighCards>=3&&pirosStr>=28;
+
+  let targetBid=0;
+  if(canPreferansz&&currentHigh<10) targetBid=10;
+  else if(totalStr>=30&&aces>=2&&currentHigh<8) targetBid=8; // Szanadu
+  else if(canBetli&&currentHigh<6) targetBid=6;
+  else if(canMizer&&currentHigh<7) targetBid=7;
+  else if(bestScore>=12&&currentHigh<colorBid) targetBid=colorBid;
+  else if(bestScore>=9&&currentHigh<colorBid) targetBid=colorBid;
+
+  // Nehézség módosítók
+  if(botDifficulty==='easy'){
+    // Könnyű bot: néha passzol jó kézzel is
+    if(Math.random()<0.3) return null;
+  } else if(botDifficulty==='hard'){
+    // Nehéz bot: ritkábban passzol, pontosabban mér
+    if(targetBid===0&&bestScore>=8&&currentHigh<colorBid) targetBid=colorBid;
+  }
+
+  if(targetBid>currentHigh) return targetBid;
+  return null; // passz
+}
+
+// ── Bot játékválasztás ──────────────────────────────────────
+function _botPickGame(pi){
+  const hand=state.hands[pi]; // már 12 lapos kéz (talon felvéve)
+  const s=state;
+  const bid=_botCalcBid(hand, s.highBid-1);
+  const gameId=bid||s.highBid;
+  let game=GAMES.find(g=>g.id>=gameId&&g.id>=s.highBid)||GAMES.find(g=>g.id>=s.highBid);
+  // Preferansznál: legalább 6 piros lap + 3 magas piros kell (tromf nincs, 6 piros vitelt kell nyerni)
+  if(game&&game.tp==='preferansz'){
+    const pirosInHand=hand.filter(c=>c.s==='piros');
+    const pirosHigh=pirosInHand.filter(c=>['F','K','Á'].includes(c.v)).length;
+    const pirosStr=pirosInHand.reduce((s,c)=>s+VR[c.v],0);
+    if(pirosInHand.length<6||pirosHigh<3||pirosStr<28){
+      game=GAMES.find(g=>g.id>=s.highBid&&g.tp!=='preferansz')||GAMES.find(g=>g.id>=s.highBid);
+    }
+  }
+  if(game) _doPickGame(game);
+}
+
+// ── Bot eldobás ──────────────────────────────────────────────
+function _botDiscard(pi){
+  const hand=state.hands[pi];
+  const g=state.game;
+  // Dobjuk el a leggyengébb lapokat a játék stratégiájától függően
+  let toDiscard;
+  if(g.tp==='betli'||g.tp==='mizer'){
+    toDiscard=[...hand].sort((a,b)=>VR[b.v]-VR[a.v]).slice(0,2).map(c=>c.id);
+  } else if(g.tp==='preferansz'){
+    // Preferansz: piros lapokat megtartjuk! Gyenge nem-piros lapokat dobjuk el
+    const nonPiros=hand.filter(c=>c.s!=='piros').sort((a,b)=>VR[a.v]-VR[b.v]);
+    const piros=hand.filter(c=>c.s==='piros').sort((a,b)=>VR[a.v]-VR[b.v]);
+    const pool=[...nonPiros,...piros];
+    toDiscard=pool.slice(0,2).map(c=>c.id);
+  } else if(g.trump){
+    const nonTrump=hand.filter(c=>c.s!==g.trump).sort((a,b)=>VR[a.v]-VR[b.v]);
+    const trump=hand.filter(c=>c.s===g.trump).sort((a,b)=>VR[a.v]-VR[b.v]);
+    const pool=[...nonTrump,...trump];
+    toDiscard=pool.slice(0,2).map(c=>c.id);
+  } else {
+    toDiscard=[...hand].sort((a,b)=>VR[a.v]-VR[b.v]).slice(0,2).map(c=>c.id);
+  }
+  // Sorban dob el 2 lapot
+  _doDiscard(toDiscard[0]);
+  setTimeout(()=>{ if(state.phase==='discard'&&state.bidWinner===pi) _doDiscard(toDiscard[1]); },600);
+}
+
+// ── Bot kijátszás ────────────────────────────────────────────
+function _botPlay(pi){
+  const s=state;
+  const hand=s.hands[pi];
+  const trick=s.trick;
+  const g=s.game;
+  if(!g||hand.length===0) return;
+
+  let card=null;
+
+  if(g.tp==='betli'){
+    card=_botPlayBetli(pi,hand,trick,g);
+  } else if(g.tp==='mizer'){
+    card=_botPlayMizer(pi,hand,trick,g);
+  } else if(g.tp==='pikkolo'){
+    card=_botPlayPikkolo(pi,hand,trick,g,s);
+  } else if(g.tp==='passround'){
+    card=_botPlayPassround(pi,hand,trick,g);
+  } else {
+    // Színjáték, Szanadu, Preferansz
+    const isBidWinner=(s.bidWinner===pi);
+    card=_botPlayColor(pi,hand,trick,g,isBidWinner,s);
+  }
+
+  if(!card) card=hand[0]; // fallback
+  _doPlay(pi,card);
+}
+
+// Érvényes lapok szűrése (kötelező szín/tromf)
+function _botValidCards(pi,hand,trick,g){
+  if(trick.length===0) return hand;
+  const lead=trick[0].card.s;
+  const hasSuit=hand.some(c=>c.s===lead);
+  if(hasSuit) return hand.filter(c=>c.s===lead);
+  if(g&&g.trump){
+    const hasTrump=hand.some(c=>c.s===g.trump);
+    if(hasTrump) return hand.filter(c=>c.s===g.trump);
+  }
+  return hand;
+}
+
+// ── Betli stratégia: ne vigyen el semmit ──
+function _botPlayBetli(pi,hand,trick,g){
+  const valid=_botValidCards(pi,hand,trick,g);
+  if(trick.length===0){
+    // Legkisebb lapot játssza ki
+    return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+  }
+  const lead=trick[0].card.s;
+  const currentWin=_trickCurrentBest(trick,null);
+  // Kijátsszuk a legkisebbet ami nem viszi el a menetet
+  const losers=valid.filter(c=>{
+    if(c.s!==lead) return true; // nem vezető szín = biztosan nem visz
+    return VR[c.v]<VR[currentWin.v];
+  }).sort((a,b)=>VR[b.v]-VR[a.v]); // legmagasabb vesztessel
+  return losers[0]||valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+}
+
+// ── Mizer stratégia: pontosan 1 vitel, nem első/utolsó ──
+function _botPlayMizer(pi,hand,trick,g){
+  const s=state;
+  const myTW=s.tw[pi];
+  const valid=_botValidCards(pi,hand,trick,g);
+  const tricksDone=s.tw[0]+s.tw[1]+s.tw[2];
+  const tricksLeft=10-tricksDone-(trick.length>0?1:0);
+
+  if(myTW===0&&trick.length===0&&tricksLeft>1){
+    // Még nem vitt, nem utolsó menet → megpróbálja elvinni (de nem elsőként sem)
+    if(tricksDone>0&&tricksDone<9){
+      return valid.sort((a,b)=>VR[b.v]-VR[a.v])[0]; // legmagasabb
+    }
+    return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+  }
+  if(myTW>=1){
+    // Már megvan az 1 vitel → veszíteni kell
+    return _botPlayBetli(pi,hand,trick,g);
+  }
+  return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+}
+
+// ── Pikkoló: pontosan 2 vitel, nem egymás után ──
+function _botPlayPikkolo(pi,hand,trick,g,s){
+  const myTW=s.tw[pi];
+  const valid=_botValidCards(pi,hand,trick,g);
+  const tricksDone=s.tw[0]+s.tw[1]+s.tw[2];
+  const lastWasMe=(s.lastTrickWinner===pi);
+
+  if(myTW<2&&!lastWasMe){
+    // Próbáljuk elvinni
+    return valid.sort((a,b)=>VR[b.v]-VR[a.v])[0];
+  }
+  // Túl sok vitel vagy utóbbi menet a miénk → veszíteni
+  return _botPlayBetli(pi,hand,trick,g);
+}
+
+// ── Körpassz ──
+function _botPlayPassround(pi,hand,trick,g){
+  const valid=_botValidCards(pi,hand,trick,g);
+  // Körpasszban minél kevesebbet vinni
+  return _botPlayBetli(pi,hand,trick,g);
+}
+
+// ── Színjáték / Szanadu / Preferansz stratégia ──
+function _botPlayColor(pi,hand,trick,g,isBidWinner,s){
+  const valid=_botValidCards(pi,hand,trick,g);
+  const trump=g.trump;
+  const isPref=(g.tp==='preferansz');
+  const bw=s.bidWinner;
+  const partner=[0,1,2].filter(i=>i!==pi&&i!==bw)[0];
+
+  // ══ LICITNYERTES stratégia ═══════════════════════════════
+  if(isBidWinner){
+    if(trick.length===0){
+      if(isPref){
+        // Preferansz: a legerősebb pirosat játssza ki
+        const piros=hand.filter(c=>c.s==='piros').sort((a,b)=>VR[b.v]-VR[a.v]);
+        if(piros.length>0) return piros[0];
+      }
+      if(trump){
+        const trumpCards=hand.filter(c=>c.s===trump).sort((a,b)=>VR[b.v]-VR[a.v]);
+        if(trumpCards.length>=3) return trumpCards[0];
+      }
+      return hand.sort((a,b)=>VR[b.v]-VR[a.v])[0];
+    }
+    const lead=trick[0].card.s;
+    const currentBest=_trickCurrentBest(trick,trump);
+    const winners=valid.filter(c=>_cardBeats(c,currentBest.card,lead,trump));
+    if(isPref){
+      // Preferansz: ha piros menetet lehet nyerni, mindenképpen nyerjük
+      if(lead==='piros'&&winners.length>0) return winners.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+      // Más szín: ha nyerhetünk, legkisebb nyerővel
+      if(winners.length>0) return winners.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+      return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+    }
+    if(winners.length>0) return winners.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+    return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+  }
+
+  // ══ ELLENFÉL stratégia ═══════════════════════════════════
+  if(isPref){
+    // Preferansz ellenfél: aláhúzás – megakadályozni a 6 piros vitelt
+    if(trick.length===0){
+      // Mi kezdünk: pirosat játsszunk ki hogy felülüthessük a licitnyertest
+      const piros=hand.filter(c=>c.s==='piros').sort((a,b)=>VR[b.v]-VR[a.v]);
+      if(piros.length>0) return piros[0];
+      return hand.sort((a,b)=>VR[b.v]-VR[a.v])[0];
+    }
+    const lead=trick[0].card.s;
+    const currentBest=_trickCurrentBest(trick,null);
+    const partnerLeads=(currentBest.pl===partner);
+    if(partnerLeads){
+      // Partnerünk vezet → hagyjuk menni, legkisebbet dobjuk
+      return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+    }
+    // Licitnyertes vezet → felülütjük ha lehet (főleg pirosban!)
+    const winners=valid.filter(c=>_cardBeats(c,currentBest.card,lead,null));
+    if(winners.length>0) return winners.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+    return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+  }
+
+  // ══ Normál színjáték ellenfél ═════════════════════════════
+  if(trick.length===0){
+    const nonTrump=hand.filter(c=>c.s!==trump);
+    return nonTrump.sort((a,b)=>VR[a.v]-VR[b.v])[0]||hand[0];
+  }
+  const lead=trick[0].card.s;
+  const currentBest=_trickCurrentBest(trick,trump);
+  if(currentBest.pl===partner&&trick.length<3){
+    return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+  }
+  const winners=valid.filter(c=>_cardBeats(c,currentBest.card,lead,trump));
+  if(winners.length>0) return winners.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+  return valid.sort((a,b)=>VR[a.v]-VR[b.v])[0];
+}
+
+
+function _trickCurrentBest(trick,trump){
+  if(!trick||trick.length===0) return null;
+  const lead=trick[0].card.s;
+  return trick.reduce((best,cur)=>{
+    if(_cardBeats(cur.card,best.card,lead,trump)) return cur;
+    return best;
+  });
+}
+
+function _cardBeats(card,against,lead,trump){
+  if(trump){
+    const ca=(card.s===trump?200:card.s===lead?10:0)+VR[card.v];
+    const aa=(against.s===trump?200:against.s===lead?10:0)+VR[against.v];
+    return ca>aa;
+  }
+  const ca=(card.s===lead?10:0)+VR[card.v];
+  const aa=(against.s===lead?10:0)+VR[against.v];
+  return ca>aa;
+}
+
+// Botok triggerelése after() után
+function _scheduleBots(){
+  if(!isHost) return;
+  const s=state;
+  [1,2].forEach(pi=>{
+    if(!botConfig[pi-1]) return;
+    const needsAct=
+      (s.phase==='bid'&&s.bidder===pi)||
+      (s.phase==='selectGame'&&s.bidWinner===pi)||
+      (s.phase==='discard'&&s.bidWinner===pi)||
+      (s.phase==='play'&&s.curP===pi);
+    if(needsAct) setTimeout(()=>_botAct(pi), 850+Math.random()*500);
+  });
+}
+
 function _mkDeck(){return SUITS.flatMap(s=>VALS.map(v=>({s,v,id:`${s}_${v}`})));}
 function _shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]];}return b;}
 
 // ═══ HELYI AKCIÓK ════════════════════════════════════════════
 function myBid(amount){
   if(state.phase!=='bid'||state.bidder!==myIndex)return;
-  sendAction({kind:'bid',amount});
+  sendAction({kind:'bid',amount,isJatek:false});
+}
+function myJatekBid(amount){
+  if(state.phase!=='bid'||state.bidder!==myIndex)return;
+  sendAction({kind:'bid',amount,isJatek:true});
 }
 function myPickGame(g){
   if(state.phase!=='selectGame'||state.bidWinner!==myIndex)return;
@@ -764,29 +1208,85 @@ function render(){
 const baseCard={minHeight:'100vh',background:`linear-gradient(160deg,${DG} 0%,${G} 70%)`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px',gap:'14px'};
 
 function rLobby(){
-  let n='',c='';
+  let n='',c='',diff='normal';
   const wrap=div(baseCard,[
-    el('div',{style:{fontSize:'56px'}},['🃏']),
-    el('h1',{style:{fontSize:'26px',letterSpacing:'4px',textShadow:'2px 2px 8px rgba(0,0,0,0.5)'}},['PREFERANSZ']),
-    el('p',{style:{color:'#a5d6a7',fontSize:'12px',textAlign:'center',lineHeight:'1.7'}},['Többjátékos · 3 ember · különböző eszközökről és hálózatokról']),
+    el('div',{style:{fontSize:'52px'}},['🃏']),
+    el('h1',{style:{fontSize:'24px',letterSpacing:'3px',textShadow:'2px 2px 8px rgba(0,0,0,0.5)',marginBottom:'2px'}},['PREFERANSZ']),
+    el('p',{style:{color:'#a5d6a7',fontSize:'11px',textAlign:'center',lineHeight:'1.6',marginBottom:'4px'}},['Magyar kártyajáték · 3 játékos']),
     netError?div({color:'#ff8a65',background:'rgba(229,57,53,0.15)',border:'1px solid rgba(229,57,53,0.4)',borderRadius:'8px',padding:'10px',fontSize:'13px',textAlign:'center',width:'100%',maxWidth:'320px'},[netError]):null,
     div({width:'100%',maxWidth:'320px',display:'flex',flexDirection:'column',gap:'10px'},[
-      div({fontSize:'12px',color:'#81c784',marginBottom:'2px'},['A neved:']),
+
+      // ── Neved ──
+      div({fontSize:'12px',color:'#81c784',marginBottom:'0px'},['A neved:']),
       inp('Pl. Péter', n, v=>n=v),
-      div({height:'8px'}),
-      btn({background:'#f9a825',color:'#1a1a1a',border:'none',borderRadius:'10px',padding:'13px',fontSize:'16px',fontWeight:'bold',width:'100%',boxShadow:'0 4px 16px rgba(249,168,37,0.4)'},
-        ()=>{if(!n.trim()){alert('Írd be a nevedet!');return;}doHost(n.trim());},['🏠 Új játék létrehozása']),
-      div({textAlign:'center',color:'rgba(255,255,255,0.3)',fontSize:'12px'},['— vagy csatlakozz —']),
+
+      // ── Nehézség ──
+      div({fontSize:'12px',color:'#81c784',marginTop:'4px',marginBottom:'2px'},['Bot nehézség:']),
+      el('select',{
+        style:{background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.25)',color:'white',borderRadius:'8px',padding:'9px 12px',fontSize:'14px',width:'100%',outline:'none'},
+        onChange:e=>diff=e.target.value
+      },[
+        el('option',{value:'easy',style:{background:'#1b5e20'}},['🟢 Könnyű (bot néha hibázik)']),
+        el('option',{value:'normal',selected:'',style:{background:'#1b5e20'}},['🟡 Normál (okos játék)']),
+        el('option',{value:'hard',style:{background:'#1b5e20'}},['🔴 Nehéz (agresszív bot)']),
+      ]),
+
+      div({height:'4px',borderBottom:'1px solid rgba(255,255,255,0.1)',margin:'2px 0'}),
+
+      // ── Bot módok ──
+      div({fontSize:'12px',color:'#ffcc02',marginBottom:'2px',fontWeight:'bold'},['🤖 Játék botokkal']),
+
+      btn({
+        background:'linear-gradient(135deg,rgba(76,175,80,0.25),rgba(27,94,32,0.4))',
+        border:'1px solid rgba(76,175,80,0.5)',color:'white',borderRadius:'10px',
+        padding:'12px',fontSize:'13px',fontWeight:'bold',width:'100%',textAlign:'left'
+      },()=>{
+        if(!n.trim()){alert('Írd be a nevedet!');return;}
+        startWithBots(n.trim(),true,true,diff);
+      },[
+        div({display:'flex',alignItems:'center',gap:'8px'},[
+          div({fontSize:'22px'},['🤖']),
+          div({},[
+            div({fontSize:'13px',fontWeight:'bold'},['Egyedül bot ellen']),
+            div({fontSize:'10px',color:'rgba(255,255,255,0.6)',marginTop:'2px'},['Te + 2 bot · Nem kell barát']),
+          ])
+        ])
+      ]),
+
+      btn({
+        background:'linear-gradient(135deg,rgba(33,150,243,0.2),rgba(13,71,161,0.4))',
+        border:'1px solid rgba(33,150,243,0.4)',color:'white',borderRadius:'10px',
+        padding:'12px',fontSize:'13px',fontWeight:'bold',width:'100%',textAlign:'left'
+      },()=>{
+        if(!n.trim()){alert('Írd be a nevedet!');return;}
+        startWithBots(n.trim(),false,true,diff);
+      },[
+        div({display:'flex',alignItems:'center',gap:'8px'},[
+          div({fontSize:'22px'},['👤']),
+          div({},[
+            div({fontSize:'13px',fontWeight:'bold'},['Te + 1 barát + 1 bot']),
+            div({fontSize:'10px',color:'rgba(255,255,255,0.6)',marginTop:'2px'},['Hívj meg 1 embert, a 3. helyre bot jön']),
+          ])
+        ])
+      ]),
+
+      div({fontSize:'10px',color:'rgba(255,255,255,0.2)',textAlign:'center'},['─── vagy online, mindenki ember ───']),
+
+      btn({background:'#f9a825',color:'#1a1a1a',border:'none',borderRadius:'10px',padding:'12px',fontSize:'14px',fontWeight:'bold',width:'100%',boxShadow:'0 4px 16px rgba(249,168,37,0.35)'},
+        ()=>{if(!n.trim()){alert('Írd be a nevedet!');return;}doHost(n.trim());},['🏠 3 emberes online játék']),
+
+      div({textAlign:'center',color:'rgba(255,255,255,0.3)',fontSize:'12px'},['— már van kódod? —']),
       inp('Szobakód (6 karakter)', c, v=>c=v.toUpperCase()),
-      btn({background:'rgba(255,255,255,0.12)',color:'white',border:'1px solid rgba(255,255,255,0.3)',borderRadius:'10px',padding:'13px',fontSize:'16px',width:'100%'},
+      btn({background:'rgba(255,255,255,0.12)',color:'white',border:'1px solid rgba(255,255,255,0.3)',borderRadius:'10px',padding:'12px',fontSize:'14px',width:'100%'},
         ()=>{if(!n.trim()){alert('Írd be a nevedet!');return;}if(!c.trim()){alert('Írd be a szobakódot!');return;}doJoin(n.trim(),c.trim());},['🔗 Csatlakozás kóddal']),
-      div({height:'4px'}),
+
       btn({background:'none',border:'1px solid rgba(165,214,167,0.3)',color:'#a5d6a7',borderRadius:'8px',padding:'9px',fontSize:'13px',width:'100%'},
-        ()=>{showRules=true;render();},['📖 Szabályzat megtekintése']),
+        ()=>{showRules=true;render();},['📖 Szabályzat']),
     ]),
   ]);
   return wrap;
 }
+
 
 function rHosting(){
   return div(baseCard,[
@@ -799,9 +1299,19 @@ function rHosting(){
     el('p',{style:{color:'rgba(255,255,255,0.4)',fontSize:'11px'}},[' (koppints a másoláshoz)']),
     div({background:'rgba(0,0,0,0.3)',borderRadius:'12px',padding:'14px 20px',width:'100%',maxWidth:'300px'},[
       div({fontSize:'12px',color:'#81c784',marginBottom:'10px',textAlign:'center',letterSpacing:'1px'},['JÁTÉKOSOK']),
-      ...[0,1,2].map(i=>div({display:'flex',alignItems:'center',gap:'10px',padding:'6px 0',borderBottom:i<2?'1px solid rgba(255,255,255,0.08)':'none'},[
-        div({width:'24px',height:'24px',borderRadius:'50%',background:i<joinedCount+1?'#4caf50':'rgba(255,255,255,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'},[i<joinedCount+1?'✓':'○']),
-        div({fontSize:'13px',color:i<joinedCount+1?'white':'rgba(255,255,255,0.3)'},[i===0?pNames[0]+' (Te – gazda)':pNames[i]||`Vendég ${i}`]),
+      ...[0,1,2].map(i=>div({display:'flex',alignItems:'center',gap:'8px',padding:'6px 0',borderBottom:i<2?'1px solid rgba(255,255,255,0.08)':'none'},[
+        div({width:'24px',height:'24px',borderRadius:'50%',
+          background:i===0?'#4caf50':botConfig[i-1]?'#7b1fa2':i<joinedCount+1?'#4caf50':'rgba(255,255,255,0.1)',
+          display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px'},
+          [i===0?'✓':botConfig[i-1]?'🤖':i<joinedCount+1?'✓':'○']),
+        div({fontSize:'13px',flex:'1',
+          color:i===0?'white':botConfig[i-1]?'#ce93d8':i<joinedCount+1?'white':'rgba(255,255,255,0.3)'},
+          [i===0?pNames[0]+' (Te)':botConfig[i-1]?pNames[i]+' 🤖':pNames[i]||`Vendég ${i}`]),
+        i>0&&!botConfig[i-1]&&i>joinedCount?btn(
+          {background:'rgba(123,31,162,0.3)',border:'1px solid rgba(123,31,162,0.5)',color:'#ce93d8',
+           borderRadius:'6px',padding:'3px 8px',fontSize:'10px'},
+          ()=>{botConfig[i-1]=true;pNames[i]=['Koppány bot','Béla bot'][i-1];joinedCount=Math.max(joinedCount,i);if(joinedCount>=2)netPhase='ready';render();},['+Bot']
+        ):null,
       ])),
     ]),
     joinedCount===2
@@ -949,7 +1459,7 @@ function rGame(){
         borderRadius:'20px',padding:'2px 10px',fontSize:'10px',color:'#ffcc02'
       }},[
         s.game.n+(s.game.trump?' · Tromf: '+SI[s.game.trump].n:' · Nincs tromf')
-        +' · Cél: '+s.game.tgt
+        +(s.game.tp==='preferansz'?' · Cél: min. 6 PIROS vitel · 2. lapot tesz':' · Cél: '+s.game.tgt)
         +(s.bidWinner!==null?' · '+pNames[s.bidWinner]:'')
         +(s.game.earlyBid?' · DUPLA':'')
       ])
@@ -964,13 +1474,50 @@ function rGame(){
       div({fontSize:'10px',color:'#a5d6a7',textAlign:'center',marginBottom:'5px'},[
         s.highBid?`Jelenlegi licit: ${s.highBid} – ${GAMES.find(g=>g.id>=s.highBid)?.n}`:'Nyitó licit'
       ]),
-      div({display:'flex',flexWrap:'wrap',gap:'4px',justifyContent:'center',marginBottom:'5px'},
-        GAMES.filter(g=>g.id>s.highBid).map(g=>btn(
-          {background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.2)',
-           color:'white',borderRadius:'7px',padding:'6px 8px',fontSize:'10px'},
-          ()=>myBid(g.id),[g.id+'·'+g.n]
-        ))
-      ),
+
+      // ── Normál +1 licit gomb ──
+      s.highBid<10
+        ? (()=>{
+            const nextId=s.highBid+1;
+            const nextGame=GAMES.find(g=>g.id===nextId);
+            return div({marginBottom:'5px'},[
+              btn({
+                width:'100%',
+                background:'rgba(255,255,255,0.13)',border:'1px solid rgba(255,255,255,0.3)',
+                color:'white',borderRadius:'8px',padding:'9px',fontSize:'13px',fontWeight:'bold'
+              },()=>myBid(nextId),[`▲ ${nextId} – ${nextGame?.n||'?'} (+1)`])
+            ]);
+          })()
+        : null,
+
+      // ── Játék gomb + ugró licit panel ──
+      s.highBid<9
+        ? div({marginBottom:'5px'},[
+            div({fontSize:'9px',color:'#ffcc02',textAlign:'center',marginBottom:'4px',
+                 background:'rgba(249,168,37,0.08)',borderRadius:'6px',padding:'4px 8px',
+                 border:'1px solid rgba(249,168,37,0.2)'},
+              ['🎯 JÁTÉK gomb – ha ugrani akarsz (talon rejtett, pontok duplán!)']),
+            btn({
+              width:'100%',
+              background:jatekModeActive?'rgba(249,168,37,0.35)':'rgba(249,168,37,0.1)',
+              border:jatekModeActive?'2px solid #f9a825':'1px solid rgba(249,168,37,0.4)',
+              color:'#ffcc02',borderRadius:'8px',padding:'8px',fontSize:'13px',fontWeight:'bold',
+              marginBottom:'5px'
+            },()=>{jatekModeActive=!jatekModeActive;render();},[
+              jatekModeActive?'🎯 JÁTÉK MÓD AKTÍV – válassz játékot!':'🎯 Játék (ugró licit aktiválása)'
+            ]),
+            jatekModeActive
+              ? div({display:'flex',flexWrap:'wrap',gap:'3px',justifyContent:'center'},
+                  GAMES.filter(g=>g.id>s.highBid+1).map(g=>btn(
+                    {background:'rgba(249,168,37,0.2)',border:'1px solid rgba(249,168,37,0.5)',
+                     color:'#ffcc02',borderRadius:'7px',padding:'6px 9px',fontSize:'11px',fontWeight:'bold'},
+                    ()=>{jatekModeActive=false;myJatekBid(g.id);},[`${g.id}·${g.n}`]
+                  ))
+                )
+              : null,
+          ])
+        : null,
+
       // Korai játék gomb (csak ha még senki nem mondott rendes licitet)
       s.highBid===0?div({marginBottom:'4px'},[
         div({fontSize:'9px',color:'#81c784',textAlign:'center',marginBottom:'3px'},['— vagy Korai Játék (dupla érték, talon nélkül) —']),
@@ -984,7 +1531,7 @@ function rGame(){
       ]):null,
       btn({width:'100%',background:'rgba(229,57,53,0.2)',border:'1px solid rgba(229,57,53,0.4)',
            color:'#ef9a9a',borderRadius:'7px',padding:'8px',fontSize:'13px'},
-        ()=>myBid(null),['✗ Passz']),
+        ()=>{jatekModeActive=false;myBid(null);},[' ✗ Passz']),
     ]));
   } else if(s.phase==='bid'){
     children.push(div({padding:'5px 8px',textAlign:'center',flexShrink:'0'},[
@@ -1146,14 +1693,20 @@ function rRules(){
         <tr><td>7</td><td>Mizer</td><td>Különleges</td></tr>
         <tr><td>8</td><td>Szanadu</td><td>Különleges</td></tr>
         <tr><td>9</td><td>Pikkoló</td><td>Különleges</td></tr>
-        <tr><td>10</td><td>Preferansz</td><td>Különleges</td></tr>
+        <tr><td>10</td><td>Preferansz</td><td>Min. 6 piros vitel · nincs tromf · 2. lapot tesz</td></tr>
       </table>
       <p>Aki megnyeri a licitet, megkapja és megnézi a talont (mindenki látja), majd felveszi, és eldönti a játékot. 2 lapot le kell raknia.</p>
 
       <h2>Különleges licitálási esetek</h2>
       <ul>
         <li><strong>Korai játék:</strong> Az első 5 lap után be lehet mondani játékot. Ebben az esetben az értéke <strong>megduplázódik</strong>, de a talont nem lehet felvenni.</li>
-        <li><strong>„Játék" mondása:</strong> Ha valaki talon nélkül szeretne játszani. Fölé lehet licitálni. Aki már mondott rendes licitet, nem mondhat Játékot.</li>
+        <li><strong>„Játék" mondása (ugró licit):</strong> Ha valaki egynél többet akar ugrani a liciten (pl. Pirosról Szanadúra), azt csak a <strong>🎯 Játék gomb megnyomásával</strong> teheti. Ilyenkor:
+          <ul>
+            <li>A talon <strong>nincs megmutatva</strong> és nem vehető fel</li>
+            <li>A pontok <strong>duplán számolódnak</strong> (nyerés és vesztés esetén egyaránt)</li>
+            <li>A <strong>pincébe is duplán</strong> kell írni – mind az ellenfeleknél, mind a vesztes esetén</li>
+          </ul>
+        </li>
         <li><strong>Körpassz:</strong> Ha mindenki passzol, az osztó kijátsza a talon 2 lapját, mindenki látja. Az elvitt vitelek számát le kell vonni a saját pontszámból.</li>
       </ul>
 
@@ -1175,13 +1728,14 @@ function rRules(){
       <p>A licitnyertes célja <strong>pontosan 2 vitel</strong>, amelyek nem lehetnek egymás után (de lehet az első és az utolsó is).</p>
 
       <h3>Preferansz (10)</h3>
-      <p>A licitnyertes célja <strong>6 vitel</strong>, nincs tromf.</p>
+      <p>A licitnyertesnek <strong>minimum 6 piros (szív) vitelt</strong> kell szereznie. Ezeken felül lehet más vitele is. <strong>Nincs tromf.</strong> A licitnyertes a <strong>2. lapot teszi</strong> (az ellenfél kezd). A két ellenfél összefog és megpróbálja megakadályozni a 6 piros vitelt – ezt hívják aláhúzásnak. Ez a játék névadója és a legmagasabb licit (10).</p>
 
       <h2>Pontozás</h2>
       <p>Minden játékos saját pontszámot vezet. A játék megállapodás szerint indul (pl. -10). A cél: eljutni 0-ra (saját pont fent). A pluszt „^" kalappal jelöljük.</p>
       <ul>
         <li><strong>Ha a licitnyertes nyert:</strong> saját pontjából levonódik a játék értéke (pl. -10 → -5 ha makk=5 nyerés esetén). Az ellenfelek pincéjébe írjuk: vitelek száma × játék értéke.</li>
         <li><strong>Ha a licitnyertes bukott:</strong> saját pontjához hozzáadódik a játék értéke (pl. -10 → -15). Betli/Mizer/Pikkoló esetén az ellenfél mind a ketten a játék értékének 5-szörösét írják a pincébe a vesztesnek.</li>
+        <li><strong>🎯 Játék kör esetén:</strong> minden pont és pince bejegyzés <strong>duplán számolódik</strong> – mind nyerés, mind vesztés esetén, és a pincébe írás is dupla!</li>
       </ul>
       <p><strong>Végső pontszám:</strong> Saját pont – (pincébe írt összeg / 100). Az nyer, akinek a legnagyobb a végső pontszáma.</p>
 
