@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Európa Földrajzi Kvíz</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,300&display=swap');
+
+:root {
+  --ink:#1a1008; --paper:#f5ede0; --paper2:#ede0cc; --paper3:#e2d0b8;
+  --gold:#b8860b; --gold2:#d4a017; --gold3:#f0c040;
+  --rust:#8b3a1a; --rust2:#c0502a;
+  --correct:#2d6a2d; --correct-bg:#d4edda;
+  --incorrect:#7a1a1a; --incorrect-bg:#f8d7da;
+  --shadow:3px 5px 0px #1a100835; --shadow2:5px 9px 0px #1a100820;
+  --radius:4px;
+  --font-d:'Playfair Display','Georgia',serif;
+  --font-b:'Source Serif 4','Georgia',serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-b);background:var(--paper);color:var(--ink);min-height:100vh;overflow-x:hidden;position:relative}
+body::before{content:'';position:fixed;inset:0;z-index:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 27px,#1a100806 27px,#1a100806 28px),repeating-linear-gradient(90deg,transparent,transparent 27px,#1a100804 27px,#1a100804 28px);pointer-events:none}
+body::after{content:'';position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 80% 60% at 20% 10%,#d4a01712 0%,transparent 60%),radial-gradient(ellipse 60% 80% at 80% 90%,#8b3a1a10 0%,transparent 60%);pointer-events:none}
+#app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 60px}
+.screen{width:100%;max-width:900px;animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.hide{display:none!important}
+
+/* HEADER */
+.site-crown{text-align:center;margin-bottom:28px;width:100%}
+.crown-orn{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+.crown-line{flex:1;max-width:120px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.crown-star{color:var(--gold);font-size:18px}
+.site-title{font-family:var(--font-d);font-size:clamp(26px,5.5vw,50px);font-weight:900;color:var(--ink);letter-spacing:-.5px;line-height:1.1;position:relative;display:inline-block}
+.site-title::after{content:'';position:absolute;bottom:-4px;left:10%;right:10%;height:3px;background:linear-gradient(90deg,transparent,var(--gold),var(--rust),var(--gold),transparent)}
+.site-subtitle{font-family:var(--font-b);font-size:13px;color:var(--gold);letter-spacing:3px;text-transform:uppercase;margin-top:14px;font-style:italic}
+
+/* CARD */
+.card{background:var(--paper);border:2px solid #1a100830;border-radius:var(--radius);box-shadow:var(--shadow2);padding:26px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--rust),var(--gold),var(--gold2),var(--rust))}
+
+/* SETUP */
+#setupScreen{display:flex;flex-direction:column;gap:22px}
+.count-label{font-family:var(--font-d);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+.count-picker{display:flex;align-items:center;border:2px solid var(--ink);border-radius:var(--radius);overflow:hidden;width:fit-content}
+.count-picker button{width:52px;height:58px;background:var(--ink);color:var(--paper);border:none;cursor:pointer;font-family:var(--font-d);font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .15s;-webkit-tap-highlight-color:transparent}
+.count-picker button:hover{background:var(--gold)}
+.count-picker button:active{transform:scale(.94)}
+.count-num{min-width:90px;height:58px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-size:34px;font-weight:900;color:var(--ink);background:var(--paper2);border-left:2px solid var(--ink);border-right:2px solid var(--ink);user-select:none}
+.count-sub{font-size:12px;color:var(--gold);font-style:italic;margin-top:6px}
+.country-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{padding:3px 11px;border:1.5px solid var(--ink);border-radius:20px;font-size:12px;background:var(--paper2);color:var(--ink);font-family:var(--font-b);transition:all .2s}
+.chip.selected{background:var(--ink);color:var(--paper)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 26px;font-family:var(--font-d);font-size:13px;font-weight:700;letter-spacing:1px;border:2px solid var(--ink);border-radius:var(--radius);cursor:pointer;transition:all .18s;position:relative;text-decoration:none;min-height:50px;-webkit-tap-highlight-color:transparent}
+.btn::after{content:'';position:absolute;bottom:-4px;right:-4px;width:100%;height:100%;border:2px solid var(--ink);border-radius:var(--radius);z-index:-1;transition:all .18s}
+.btn:hover{transform:translate(-2px,-2px)}
+.btn:hover::after{bottom:-6px;right:-6px}
+.btn:active{transform:translate(0,0)}
+.btn:active::after{bottom:-2px;right:-2px}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-primary::after{background:var(--gold);border-color:var(--gold)}
+.btn-gold{background:var(--gold);color:var(--ink)}
+.btn-gold::after{background:var(--rust);border-color:var(--rust)}
+.btn-rust{background:var(--rust);color:var(--paper)}
+.btn-rust::after{background:var(--ink)}
+.btn-wide{width:100%}
+
+/* PROGRESS */
+.progress-wrap{display:flex;flex-direction:column;gap:5px;margin-bottom:16px}
+.progress-row{display:flex;justify-content:space-between;align-items:center}
+.progress-lbl{font-family:var(--font-d);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+.progress-sc{font-family:var(--font-d);font-size:13px;font-weight:700;color:var(--ink)}
+.progress-track{height:8px;background:var(--paper3);border:1.5px solid var(--ink);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--rust),var(--gold));transition:width .5s cubic-bezier(.4,0,.2,1)}
+
+/* QUIZ LAYOUT */
+#quizScreen{display:flex;flex-direction:column;gap:16px}
+.quiz-grid{display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:start}
+@media(max-width:680px){.quiz-grid{grid-template-columns:1fr}}
+
+/* MAP PANEL */
+.map-panel{background:var(--paper2);border:2px solid var(--ink);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:var(--shadow);position:sticky;top:14px}
+@media(max-width:680px){.map-panel{position:static}}
+.map-lbl{font-family:var(--font-d);font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--gold)}
+.map-svg-box{width:100%;max-width:240px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--paper);border:1.5px solid var(--paper3);border-radius:var(--radius);padding:8px}
+.map-svg-box svg{width:100%;height:100%;overflow:visible}
+.round-info{font-family:var(--font-d);font-size:20px;font-weight:900;color:var(--ink);text-align:center}
+.round-sub{font-size:11px;color:var(--gold);letter-spacing:2px;text-transform:uppercase}
+.map-hint{font-size:11px;color:var(--ink);opacity:.5;font-style:italic;text-align:center;line-height:1.5}
+
+/* LEITNER STATUS */
+.leitner-bar{background:var(--rust2);color:var(--paper);padding:9px 15px;border-radius:var(--radius);font-family:var(--font-d);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.leitner-pass{background:var(--gold3);color:var(--ink);padding:2px 10px;border-radius:12px;font-size:12px}
+
+/* FORM PANEL */
+.form-panel{background:var(--paper);border:2px solid var(--ink);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.sec-head{font-family:var(--font-d);font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);padding-bottom:7px;border-bottom:1px dashed var(--paper3);margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.f-sec{margin-bottom:18px}
+.f-sec:last-child{margin-bottom:0}
+.f-row{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.f-lbl{font-family:var(--font-b);font-size:12px;font-style:italic;color:var(--ink);opacity:.65;min-width:70px;flex-shrink:0}
+.f-wrap{flex:1;display:flex;flex-direction:column}
+.f-inp{width:100%;background:var(--paper2);border:1.5px solid var(--paper3);border-radius:var(--radius);padding:10px 12px;font-family:var(--font-b);font-size:15px;color:var(--ink);outline:none;transition:border-color .2s,background .2s;min-height:44px;-webkit-appearance:none}
+.f-inp:focus{border-color:var(--ink);background:var(--paper)}
+.f-inp.correct{border-color:var(--correct);background:var(--correct-bg);color:var(--correct)}
+.f-inp.incorrect{border-color:var(--incorrect);background:var(--incorrect-bg);color:var(--incorrect)}
+.f-inp:disabled{opacity:.88;cursor:default}
+.f-icon{width:22px;text-align:center;font-size:15px;flex-shrink:0}
+.corr-hint{font-size:12px;color:var(--correct);background:var(--correct-bg);border:1px solid var(--correct);border-radius:var(--radius);padding:3px 8px;margin-top:2px;display:none}
+.corr-hint.show{display:block}
+.acc-vals{font-size:11px;color:var(--ink);opacity:.5;font-style:italic;padding:2px 6px;margin-top:1px;display:none}
+.acc-vals.show{display:block}
+.action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.pts-badge{display:none;align-items:center;gap:6px;padding:6px 14px;border:1.5px solid var(--ink);border-radius:20px;font-family:var(--font-d);font-size:13px;font-weight:700;background:var(--paper2)}
+.pts-badge.show{display:inline-flex}
+.pts-n{color:var(--gold);font-size:18px}
+
+/* SUMMARY */
+#summaryScreen{display:flex;flex-direction:column;gap:20px}
+.sum-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.stat-box{background:var(--paper2);border:2px solid var(--ink);border-radius:var(--radius);padding:14px 10px;text-align:center;box-shadow:var(--shadow)}
+.stat-val{font-family:var(--font-d);font-size:34px;font-weight:900;line-height:1;color:var(--ink)}
+.stat-val.good{color:var(--correct)}
+.stat-val.bad{color:var(--incorrect)}
+.stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;opacity:.55;margin-top:4px}
+.cr-list{display:flex;flex-direction:column;gap:7px}
+.cr-item{display:flex;align-items:center;gap:10px;padding:9px 13px;border:1.5px solid var(--paper3);border-radius:var(--radius);background:var(--paper2)}
+.cr-item.ok{border-color:var(--correct);background:var(--correct-bg)}
+.cr-item.fail{border-color:var(--incorrect);background:var(--incorrect-bg)}
+.cr-mini{width:38px;height:38px;flex-shrink:0}
+.cr-mini svg{width:100%;height:100%}
+.cr-name{font-weight:600;font-size:14px;flex:1}
+.cr-pts{font-family:var(--font-d);font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap}
+
+/* LEITNER BOX */
+.leitner-box{background:linear-gradient(135deg,#fff8e8,#ffecd0);border:2px solid var(--gold2);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden}
+.leitner-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--rust),var(--gold),var(--gold2))}
+.leitner-title{font-family:var(--font-d);font-size:17px;font-weight:900;color:var(--rust);margin-bottom:5px}
+.leitner-desc{font-size:13px;color:var(--ink);opacity:.75;line-height:1.6;margin-bottom:12px}
+.leitner-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:13px}
+.lchip{padding:3px 10px;background:var(--rust2);color:var(--paper);border-radius:20px;font-size:12px}
+
+/* REVIEW TABLE */
+.rtbl-wrap{overflow-x:auto;border:1.5px solid var(--paper3);border-radius:var(--radius)}
+.rtbl{width:100%;border-collapse:collapse;font-size:12px;min-width:480px}
+.rtbl th{background:var(--ink);color:var(--paper);font-family:var(--font-d);font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:7px 9px;text-align:left}
+.rtbl td{padding:6px 9px;border-bottom:1px solid var(--paper3);vertical-align:top}
+.rtbl tr:last-child td{border-bottom:none}
+.rtbl tr:nth-child(even) td{background:var(--paper2)}
+.rtd-ok{color:var(--correct);font-weight:600}
+.rtd-fail{color:var(--incorrect)}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:var(--paper);padding:11px 20px;border-radius:var(--radius);font-family:var(--font-d);font-size:13px;font-weight:700;letter-spacing:.5px;z-index:999;transition:transform .3s cubic-bezier(.4,0,.2,1);max-width:90vw;text-align:center;box-shadow:4px 4px 0 var(--gold)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* CONFETTI */
+.cp{position:fixed;top:-10px;pointer-events:none;z-index:9999;animation:cf var(--d) var(--dl) ease-in forwards}
+@keyframes cf{0%{top:-10px;transform:translateX(0) rotate(0deg);opacity:1}100%{top:105vh;transform:translateX(var(--dx)) rotate(var(--rot));opacity:0}}
+
+@media(max-width:480px){
+  .card,.map-panel,.form-panel{padding:14px 12px}
+  .f-lbl{min-width:58px;font-size:11px}
+  .f-inp{font-size:14px}
+  .btn{padding:12px 18px;font-size:12px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══════════ SETUP ══════════ -->
+<div id="setupScreen" class="screen">
+  <div class="site-crown">
+    <div class="crown-orn"><div class="crown-line"></div><span class="crown-star">✦</span><div class="crown-line"></div></div>
+    <div class="site-title">Európa Földrajzi Kvíz</div>
+    <div class="site-subtitle">Interaktív tanulás · Leitner-módszer</div>
+  </div>
+
+  <div class="card">
+    <div class="count-label">Hány ország legyen a körben?</div>
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      <div>
+        <div class="count-picker">
+          <button id="btnMinus" aria-label="Csökkent">−</button>
+          <div class="count-num" id="countNum">7</div>
+          <button id="btnPlus" aria-label="Növel">+</button>
+        </div>
+        <div class="count-sub">a 14 elérhető ország közül</div>
+      </div>
+    </div>
+    <div class="country-chips" id="countryChips" style="margin-top:14px"></div>
+  </div>
+
+  <div style="text-align:center">
+    <button class="btn btn-primary" id="startBtn" style="max-width:340px;width:100%">▶ Játék indítása</button>
+  </div>
+
+  <div class="card" style="background:var(--paper2)">
+    <p style="font-size:14px;color:var(--ink);opacity:.72;line-height:1.7;font-style:italic;text-align:center">
+      Azonosítsd be az országot a körvonala alapján, majd add meg a fővárost,
+      városokat, folyókat, ásványkincseket és növényeket. A hibás válaszokat
+      a <strong>Leitner-módszer</strong> szerint addig ismételjük, míg minden 100%-os nem lesz!
+    </p>
+  </div>
+</div>
+
+<!-- ══════════ QUIZ ══════════ -->
+<div id="quizScreen" class="screen hide">
+  <div class="site-crown" style="margin-bottom:14px">
+    <div class="site-title" style="font-size:clamp(18px,4vw,28px)">Európa Földrajzi Kvíz</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-row">
+      <span class="progress-lbl" id="progressLbl">1 / 7. ország</span>
+      <span class="progress-sc" id="progressSc">Pont: 0</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+
+  <div id="leitnerBar" class="leitner-bar hide">
+    <span>🔁 Leitner-ismétlés — hibás országok</span>
+    <span class="leitner-pass" id="leitnerPass">0 átment</span>
+  </div>
+
+  <div class="quiz-grid">
+    <!-- MAP -->
+    <div class="map-panel">
+      <div class="map-lbl">◈ Vak térkép ◈</div>
+      <div class="map-svg-box" id="mapBox"></div>
+      <div class="round-info">
+        <span id="qCur">1</span><span style="opacity:.3"> / </span><span id="qTot">7</span>
+        <div class="round-sub" id="qLbl">Normál kör</div>
+      </div>
+      <div class="map-hint">Azonosítsd az ország alakját és töltsd ki az adatokat!</div>
+    </div>
+
+    <!-- FORM -->
+    <div class="form-panel">
+      <div class="f-sec">
+        <div class="sec-head">🌍 Ország azonosítása</div>
+        <div class="f-row">
+          <div class="f-lbl">Ország neve</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_country" type="text" placeholder="Pl. Magyarország" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_country"></div>
+          </div>
+          <div class="f-icon" id="ic_country"></div>
+        </div>
+      </div>
+
+      <div class="f-sec">
+        <div class="sec-head">⭐ Főváros</div>
+        <div class="f-row">
+          <div class="f-lbl">Főváros</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_capital" type="text" placeholder="Pl. Budapest" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_capital"></div>
+          </div>
+          <div class="f-icon" id="ic_capital"></div>
+        </div>
+      </div>
+
+      <div class="f-sec">
+        <div class="sec-head">🏙️ Nagyvárosok <span style="font-weight:400;font-size:10px;opacity:.6">(bármelyik 3 elfogadott)</span></div>
+        <div class="f-row">
+          <div class="f-lbl">1. Város</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_city1" type="text" placeholder="Nagyváros" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_city1"></div>
+          </div>
+          <div class="f-icon" id="ic_city1"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">2. Város</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_city2" type="text" placeholder="Nagyváros" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_city2"></div>
+          </div>
+          <div class="f-icon" id="ic_city2"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">3. Város</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_city3" type="text" placeholder="Nagyváros" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_city3"></div>
+          </div>
+          <div class="f-icon" id="ic_city3"></div>
+        </div>
+        <div class="acc-vals show" id="acc_cities"></div>
+      </div>
+
+      <div class="f-sec">
+        <div class="sec-head">🌊 Folyók <span style="font-weight:400;font-size:10px;opacity:.6">(bármelyik 3 elfogadott)</span></div>
+        <div class="f-row">
+          <div class="f-lbl">1. Folyó</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_river1" type="text" placeholder="Folyónév" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_river1"></div>
+          </div>
+          <div class="f-icon" id="ic_river1"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">2. Folyó</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_river2" type="text" placeholder="Folyónév" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_river2"></div>
+          </div>
+          <div class="f-icon" id="ic_river2"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">3. Folyó</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_river3" type="text" placeholder="Folyónév" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_river3"></div>
+          </div>
+          <div class="f-icon" id="ic_river3"></div>
+        </div>
+        <div class="acc-vals" id="acc_rivers"></div>
+      </div>
+
+      <div class="f-sec">
+        <div class="sec-head">⛏️ Ásványkincsek &amp; Mezőgazdaság</div>
+        <div class="f-row">
+          <div class="f-lbl">Altalaj kincs</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_mineral" type="text" placeholder="Pl. kőolaj, szén" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_mineral"></div>
+            <div class="acc-vals" id="acc_mineral"></div>
+          </div>
+          <div class="f-icon" id="ic_mineral"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-lbl">Növény</div>
+          <div class="f-wrap">
+            <input class="f-inp" id="i_crop" type="text" placeholder="Pl. búza, szőlő" autocomplete="off" spellcheck="false">
+            <div class="corr-hint" id="h_crop"></div>
+            <div class="acc-vals" id="acc_crop"></div>
+          </div>
+          <div class="f-icon" id="ic_crop"></div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-primary" id="checkBtn">🔍 Ellenőrzés</button>
+        <button class="btn btn-gold hide" id="nextBtn">Következő ▶</button>
+        <div class="pts-badge" id="ptsBadge">⭐ <span class="pts-n" id="ptsN">0</span> / 10 pont</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SUMMARY ══════════ -->
+<div id="summaryScreen" class="screen hide">
+  <div class="site-crown" style="margin-bottom:18px">
+    <div class="crown-orn"><div class="crown-line"></div><span class="crown-star">✦</span><div class="crown-line"></div></div>
+    <div class="site-title" style="font-size:clamp(22px,4.5vw,36px)">Összefoglalás</div>
+  </div>
+
+  <div class="sum-stats" id="sumStats"></div>
+
+  <div class="leitner-box" id="leitnerBox" style="display:none">
+    <div class="leitner-title">🔁 Hibák gyakorlása — Leitner-módszer</div>
+    <div class="leitner-desc">Az alábbi országokban hibáztál. Addig ismételjük őket, amíg minden kérdés 100%-os nem lesz. Ha megint hibázol, az ország visszakerül a sor végére!</div>
+    <div class="leitner-chips" id="leitnerChips"></div>
+    <button class="btn btn-rust" id="leitnerBtn">🔁 Hibák begyakorlása</button>
+  </div>
+
+  <div class="card">
+    <div class="sec-head" style="margin-bottom:12px">📊 Ország eredmények</div>
+    <div class="cr-list" id="crList"></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-head" style="margin-bottom:10px">📋 Részletes áttekintés</div>
+    <div class="rtbl-wrap">
+      <table class="rtbl">
+        <thead><tr><th>Ország</th><th>Kategória</th><th>Te válaszod</th><th>Helyes</th></tr></thead>
+        <tbody id="rtblBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn btn-primary" id="newGameBtn" style="flex:1;min-width:150px">🔄 Új játék</button>
+  </div>
+</div>
+
+</div>
+<div class="toast" id="toastEl"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  ADATBÁZIS – 14 ORSZÁG részletes SVG körvonalakkal
+// ═══════════════════════════════════════════════════
+// Az SVG path-ok valódi, leegyszerűsített földrajzi
+// koordinátákból épülnek fel – felismerhetők az arányok.
+
+const DB = [
+{
+  id:'romania', name:'Románia',
+  namePool:['románia','romania','rumania'],
+  capital:'Bukarest', capitalPool:['bukarest','bucuresti','bucharest'],
+  cities:['Kolozsvár','Temesvár','Jászvásár'],
+  citiesPool:[['kolozsvár','cluj','cluj-napoca','klausenburg'],['temesvár','timisoara','timișoara','temesvar'],['jászvásár','iași','iasi','jassy'],['brăila','braila'],['galac','galați'],['konstanca','constanta'],['craiova'],['ploiești','ploiesti'],['brașov','brasov','brassó']],
+  rivers:['Duna','Prut','Szeret'],
+  riversPool:[['duna','dunărea','danube'],['prut'],['szeret','siret'],['maros','mureș'],['olt'],['dnyeszter','nistru']],
+  mineral:['kőolaj','földgáz','szén'],
+  mineralPool:['kőolaj','koolaj','olaj','földgáz','foldgaz','szén','szen','lignit','só'],
+  crop:['búza','kukorica','napraforgó'],
+  cropPool:['búza','buza','kukorica','napraforgó','napraforgo','szőlő','szolo','cukorrépa','árpa'],
+  // Romania: wide east-west shape, notched north, curved Carpathians spine
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M76.4,160.0 L20.0,121.3 L172.7,104.7 L206.4,70.9 L183.3,59.0 L184.0,53.4 L199.7,41.6 L197.7,37.9 L223.9,35.8 L221.1,33.2 L212.5,32.7 L214.3,21.9 L224.7,20.4 L223.2,22.1 L228.0,24.2 L244.4,20.0 L257.3,28.8 L281.9,37.2 L343.0,43.3 L355.9,43.0 L365.8,45.2 L399.2,59.8 L419.3,62.3 L418.1,67.3 L396.3,79.4 L372.1,85.9 L350.6,97.8 L337.1,97.5 L339.0,94.6 L335.1,94.7 L319.5,100.5 L311.9,110.0 L316.9,121.0 L284.6,122.9 L266.7,125.3 L258.0,128.1 L252.7,135.0 L244.2,138.0 L198.2,140.4 L186.8,144.6 L187.8,149.0 L177.1,153.6 L162.2,154.8 L151.8,153.7 L126.4,154.1 L103.1,158.2 L76.4,160.0 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'moldova', name:'Moldova',
+  namePool:['moldova','moldávia','moldavia'],
+  capital:'Chișinău', capitalPool:['chișinău','chisinau','kisinyov','kisinju'],
+  cities:['Bălți','Tiraspol','Bender'],
+  citiesPool:[['bălți','balti','belcy'],['tiraspol'],['bender','tighina'],['rybnica'],['cahul'],['soroca']],
+  rivers:['Prut','Dnyeszter','Réut'],
+  riversPool:[['prut'],['dnyeszter','dniester','nistru'],['réut','raut','reut'],['duna','danube']],
+  mineral:['lignit','foszfát','gipsz'],
+  mineralPool:['lignit','foszfat','foszfát','gipsz','kavics','homok','só'],
+  crop:['búza','kukorica','szőlő'],
+  cropPool:['búza','buza','kukorica','szőlő','szolo','napraforgó','napraforgo','dohány'],
+  // Moldova: tall, thin, irregular north-south strip
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M20.0,30.3 L46.0,24.3 L89.4,25.1 L126.0,20.0 L156.8,22.9 L187.4,30.5 L210.4,31.4 L216.8,32.6 L216.1,35.8 L225.5,35.7 L230.0,38.4 L237.7,35.5 L265.4,37.0 L282.4,44.9 L305.5,44.3 L315.2,53.2 L306.5,66.6 L352.6,76.8 L349.4,83.4 L356.3,91.0 L391.2,97.2 L398.5,102.1 L396.5,110.6 L420.0,115.9 L413.7,117.9 L386.6,119.2 L371.7,114.7 L361.2,117.0 L325.9,113.9 L314.5,117.9 L312.4,111.3 L286.4,114.3 L283.3,118.7 L291.9,127.1 L285.2,132.9 L261.4,138.0 L260.4,141.9 L233.3,150.3 L234.1,157.0 L201.5,160.0 L185.8,153.3 L195.5,151.1 L188.6,136.4 L205.1,114.6 L204.6,105.9 L185.5,90.3 L133.3,73.5 L101.8,59.6 L61.2,35.3 L39.2,30.5 L20.0,30.3 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'ukraine', name:'Ukrajna',
+  namePool:['ukrajna','ukraine','ukraina'],
+  capital:'Kijev', capitalPool:['kijev','kiev','kyiv','kijiv'],
+  cities:['Harkiv','Odessza','Lviv'],
+  citiesPool:[['harkiv','kharkov','kharkiv'],['odessza','odessa','odesa'],['lviv','lwów','lemberg'],['dnyipro','dnipro'],['zaporizzsja'],['krívoj rog'],['mariupol'],['csernyivci','chernivtsi']],
+  rivers:['Dnyeper','Dnyeszter','Duna'],
+  riversPool:[['dnyeper','dnieper','dnipro'],['dnyeszter','dniester'],['duna','danube'],['déli bug','buh'],['donec','donets']],
+  mineral:['szén','vasérc','mangán'],
+  mineralPool:['szén','szen','vasérc','vaserc','mangán','mangan','kőolaj','kálisó','titán'],
+  crop:['búza','kukorica','napraforgó'],
+  cropPool:['búza','buza','kukorica','napraforgó','napraforgo','árpa','cukorrépa'],
+  // Ukraine: very wide, slightly wavy top, with Crimea peninsula jut at bottom-right
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M377.5,125.3 L362.5,125.7 L345.9,132.5 L324.4,134.2 L307.2,143.9 L312.2,140.6 L311.1,137.6 L302.7,142.3 L304.8,150.9 L299.1,146.3 L293.8,146.5 L279.5,142.0 L271.1,144.8 L266.1,142.6 L249.9,144.3 L235.6,140.6 L239.5,137.8 L229.4,135.5 L247.4,137.0 L252.2,134.3 L240.3,133.8 L234.0,123.0 L237.4,128.5 L236.5,133.7 L228.9,133.4 L229.6,131.3 L226.1,134.1 L212.6,135.5 L209.5,140.9 L199.8,148.3 L186.6,151.0 L188.3,159.5 L181.6,156.6 L167.3,160.0 L155.2,156.0 L161.5,154.8 L161.4,152.0 L171.5,144.9 L171.7,137.3 L176.8,136.1 L177.2,138.8 L179.4,137.1 L188.4,137.5 L191.3,139.3 L197.8,137.9 L193.2,135.8 L192.2,130.3 L185.4,127.8 L184.6,121.9 L175.7,117.7 L177.3,112.3 L175.4,108.6 L170.9,108.9 L167.6,105.6 L160.7,106.2 L140.4,98.7 L124.8,100.4 L112.8,104.0 L109.6,108.1 L81.4,113.4 L72.3,109.0 L65.5,109.8 L42.4,106.3 L36.6,109.0 L34.2,105.8 L20.0,100.1 L20.2,96.9 L29.0,87.0 L35.7,87.7 L32.8,85.1 L32.8,76.4 L55.1,60.9 L63.5,57.8 L61.0,52.6 L63.7,50.8 L54.1,41.8 L52.8,35.6 L61.0,36.0 L69.6,30.2 L104.3,29.3 L131.4,32.6 L134.8,35.9 L143.5,36.4 L143.8,38.3 L154.5,35.6 L166.7,39.3 L174.9,35.2 L180.4,40.3 L198.5,38.3 L207.0,42.8 L208.9,40.9 L207.9,34.0 L216.7,26.5 L242.1,26.4 L249.0,21.0 L277.9,20.2 L292.6,32.0 L286.5,34.2 L289.9,41.2 L288.5,43.0 L307.4,44.0 L312.9,47.3 L315.2,57.6 L319.2,61.1 L330.8,60.3 L342.0,64.3 L359.9,60.2 L373.7,70.1 L378.4,67.5 L393.1,72.1 L398.8,71.4 L412.3,77.1 L418.9,77.0 L419.6,83.5 L410.2,88.3 L417.2,91.9 L412.5,92.2 L409.3,96.5 L413.5,97.4 L413.8,102.1 L416.2,102.7 L412.2,110.1 L392.7,110.7 L380.9,115.4 L377.2,121.0 L378.9,121.8 L377.5,125.3 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'hungary', name:'Magyarország',
+  namePool:['magyarország','magyarorszag','hungary'],
+  capital:'Budapest', capitalPool:['budapest'],
+  cities:['Debrecen','Miskolc','Pécs'],
+  citiesPool:[['debrecen'],['miskolc'],['pécs','pecs'],['győr','gyor'],['szeged'],['székesfehérvár'],['nyíregyháza'],['kecskemét']],
+  rivers:['Duna','Tisza','Dráva'],
+  riversPool:[['duna','danube'],['tisza'],['dráva','drava','drau'],['rába','raba'],['körös'],['szamos']],
+  mineral:['bauxit','szén','mangán'],
+  mineralPool:['bauxit','bauxite','szén','szen','mangán','mangan','lignit','kőolaj','uránérc'],
+  crop:['búza','kukorica','napraforgó'],
+  cropPool:['búza','buza','kukorica','napraforgó','napraforgo','cukorrépa','paprika','szőlő'],
+  // Hungary: distinctive east-west elongated with uneven border notches
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M376.1,27.6 L383.3,27.5 L389.0,35.2 L402.7,41.4 L413.7,42.7 L420.0,50.9 L404.2,60.1 L385.4,62.1 L368.3,73.3 L368.0,78.8 L348.3,96.4 L338.7,113.3 L328.2,118.0 L324.9,127.7 L311.7,136.1 L299.7,135.2 L286.6,141.4 L280.3,139.8 L264.6,142.6 L227.6,139.7 L207.8,147.8 L196.6,147.2 L187.2,151.3 L171.7,152.5 L158.2,159.3 L130.3,159.2 L91.8,148.1 L65.9,131.3 L45.0,123.4 L31.2,105.7 L20.0,105.4 L29.4,100.0 L41.2,98.2 L43.6,92.5 L39.1,87.4 L40.6,78.6 L51.3,76.2 L54.4,71.7 L52.2,68.1 L39.4,64.7 L49.4,60.9 L60.9,64.5 L77.4,63.1 L75.3,56.5 L82.2,48.0 L92.2,48.7 L118.4,59.9 L175.1,59.1 L179.1,48.2 L218.9,42.6 L228.3,36.9 L247.5,40.8 L270.1,33.2 L279.3,21.4 L336.0,20.1 L351.9,30.6 L376.1,27.6 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'germany', name:'Németország',
+  namePool:['németország','nemetorszag','germany','deutschland'],
+  capital:'Berlin', capitalPool:['berlin'],
+  cities:['München','Hamburg','Köln'],
+  citiesPool:[['münchen','munchen','munich'],['hamburg'],['köln','koln','cologne'],['frankfurt'],['stuttgart'],['düsseldorf'],['dortmund'],['essen'],['leipzig'],['dresden'],['nürnberg','nuremberg']],
+  rivers:['Rajna','Duna','Elba'],
+  riversPool:[['rajna','rhine','rhein'],['duna','danube','donau'],['elba','elbe'],['odera','oder'],['weser'],['main'],['mozel','mosel']],
+  mineral:['szén','kálisó','vasérc'],
+  mineralPool:['szén','szen','kálisó','kaliso','vasérc','vaserc','lignit','rézérc'],
+  crop:['búza','árpa','cukorrépa'],
+  cropPool:['búza','buza','árpa','arpa','cukorrépa','burgonya','rozs','repce','zab'],
+  // Germany: taller than wide, broader at top-north, narrows south with Bavaria bump
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M180.1,155.8 L138.6,151.5 L131.2,153.0 L138.5,153.9 L132.4,154.7 L94.6,154.4 L96.8,145.0 L106.5,136.7 L119.7,132.3 L119.5,130.8 L89.6,127.7 L58.3,127.5 L49.6,123.4 L41.3,122.4 L47.5,116.2 L37.4,114.9 L31.0,110.9 L33.9,108.5 L42.1,107.0 L41.1,104.5 L34.0,103.2 L36.5,101.9 L26.0,99.1 L28.3,96.3 L20.0,94.0 L31.9,91.9 L29.5,90.5 L34.9,86.3 L24.0,79.8 L58.6,77.7 L61.3,76.5 L57.9,74.6 L70.8,71.1 L70.0,68.2 L56.4,66.1 L58.9,64.2 L70.5,64.2 L77.7,57.8 L78.5,51.8 L72.2,50.0 L78.9,44.6 L114.0,43.9 L120.9,46.8 L118.3,48.2 L124.3,48.6 L128.1,45.5 L135.1,47.3 L135.2,49.6 L136.6,42.1 L140.6,40.3 L166.2,40.7 L191.5,46.5 L170.9,40.6 L156.3,39.3 L153.2,32.7 L141.7,32.1 L141.9,30.1 L155.1,28.7 L155.4,27.3 L142.8,20.0 L168.4,21.9 L184.1,21.0 L201.9,24.6 L202.2,26.4 L195.2,28.6 L207.2,28.3 L232.9,31.7 L245.2,30.4 L245.0,34.3 L236.3,36.4 L241.0,38.0 L262.0,38.9 L279.4,35.0 L293.1,34.6 L313.4,28.7 L333.2,29.8 L351.5,35.1 L363.6,34.9 L369.7,40.7 L386.9,43.1 L393.5,53.4 L381.2,59.5 L402.7,66.2 L399.8,69.3 L408.5,74.6 L401.9,79.2 L407.3,84.9 L416.5,86.6 L420.0,89.9 L417.7,92.8 L409.1,97.9 L402.4,97.2 L399.4,94.7 L389.6,93.9 L386.8,94.5 L391.7,96.4 L356.2,99.9 L329.4,105.3 L312.2,105.6 L300.4,109.4 L292.2,107.8 L310.6,114.5 L305.3,117.3 L315.9,122.2 L365.6,133.6 L366.2,137.5 L361.4,138.7 L353.2,137.6 L348.3,141.5 L321.5,145.9 L329.9,149.6 L327.5,152.5 L334.3,153.6 L332.6,156.6 L318.2,153.4 L297.4,152.5 L296.4,154.2 L246.4,158.1 L239.0,155.9 L220.1,155.4 L217.0,158.5 L208.9,160.0 L209.7,158.6 L199.7,156.2 L189.9,155.0 L180.1,155.8 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'france', name:'Franciaország',
+  namePool:['franciaország','franciaorszag','france'],
+  capital:'Párizs', capitalPool:['párizs','parizs','paris'],
+  cities:['Marseille','Lyon','Toulouse'],
+  citiesPool:[['marseille'],['lyon'],['toulouse'],['nice'],['nantes'],['strasbourg'],['bordeaux'],['lille'],['rennes'],['montpellier']],
+  rivers:['Szajna','Rhône','Loire'],
+  riversPool:[['szajna','seine'],['rhône','rhone','róna'],['loire'],['garonne'],['dordogne'],['rajna','rhein','rhine'],['saone','saône']],
+  mineral:['szén','vasérc','bauxit'],
+  mineralPool:['szén','szen','vasérc','vaserc','bauxit','bauxite','uránérc','kálisó'],
+  crop:['búza','szőlő','cukorrépa'],
+  cropPool:['búza','buza','szőlő','szolo','cukorrépa','árpa','kukorica','napraforgó','repce'],
+  // France: famous hexagonal shape
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M403.7,78.8 L395.3,81.4 L383.7,81.1 L381.6,82.0 L384.7,83.2 L367.8,89.2 L366.4,92.3 L355.8,97.0 L356.6,99.8 L352.7,100.8 L353.9,102.0 L359.8,101.2 L360.9,99.0 L366.9,97.4 L377.7,97.8 L377.6,101.6 L385.3,105.4 L378.2,108.3 L389.4,113.6 L387.1,116.1 L373.3,118.8 L376.5,121.0 L384.4,122.5 L385.6,124.2 L379.8,127.3 L381.6,130.0 L394.5,133.0 L404.4,132.6 L405.6,133.9 L399.9,138.7 L375.9,144.6 L371.3,147.2 L357.2,149.1 L335.2,146.8 L324.5,143.5 L313.7,144.6 L293.3,141.3 L288.9,141.7 L268.7,147.3 L262.2,151.5 L263.5,156.3 L267.2,158.7 L230.7,159.8 L220.5,157.6 L220.6,156.1 L211.9,156.2 L209.5,154.8 L191.3,152.6 L188.4,152.6 L187.2,154.8 L166.4,154.8 L158.4,152.8 L149.5,153.2 L144.0,151.1 L127.3,148.7 L122.4,149.4 L123.9,146.6 L112.0,144.1 L121.6,141.7 L129.0,126.6 L134.3,124.6 L131.9,123.5 L129.0,125.0 L134.1,111.6 L142.0,113.9 L146.2,118.4 L150.6,119.8 L143.1,112.6 L130.6,108.7 L135.7,108.3 L132.1,99.3 L112.3,96.1 L103.8,91.4 L105.1,87.8 L99.5,85.7 L104.8,84.0 L113.6,84.9 L106.4,83.4 L90.0,83.3 L92.4,80.8 L81.8,80.1 L81.2,78.3 L46.7,74.8 L34.0,75.1 L30.4,72.7 L22.6,71.5 L33.4,69.4 L25.7,67.4 L36.2,67.2 L21.3,66.2 L20.0,64.8 L27.2,62.0 L67.5,58.3 L74.5,59.2 L84.2,63.4 L91.8,61.5 L105.5,62.6 L108.6,60.7 L125.0,61.5 L119.1,58.9 L118.6,52.3 L110.1,44.2 L128.6,44.3 L132.3,49.2 L162.6,50.7 L180.6,48.2 L171.7,47.2 L173.4,43.9 L206.3,38.9 L217.0,34.6 L216.6,26.2 L219.5,23.7 L245.9,20.0 L248.1,23.8 L253.2,26.0 L264.0,25.5 L269.1,29.8 L279.1,30.7 L282.0,33.6 L290.1,33.1 L297.1,34.7 L297.1,39.5 L308.5,39.5 L317.0,36.3 L318.5,42.5 L331.3,44.3 L338.4,47.1 L361.2,47.4 L370.2,49.1 L376.4,53.0 L398.6,53.2 L419.8,56.1 L420.0,57.6 L410.6,61.7 L403.8,69.6 L401.1,77.5 L403.7,78.8 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'spain', name:'Spanyolország',
+  namePool:['spanyolország','spanyolorszag','spain','españa','espana'],
+  capital:'Madrid', capitalPool:['madrid'],
+  cities:['Barcelona','Valencia','Sevilla'],
+  citiesPool:[['barcelona'],['valencia'],['sevilla','seville'],['zaragoza'],['málaga','malaga'],['murcia'],['bilbao'],['alicante'],['córdoba','cordoba']],
+  rivers:['Ebro','Tajo','Guadalquivir'],
+  riversPool:[['ebro'],['tajo','tagus'],['guadalquivir'],['duero','douro'],['guadiana'],['júcar'],['segura'],['miño','minho']],
+  mineral:['ólom','higany','vasérc'],
+  mineralPool:['ólom','olom','higany','vasérc','vaserc','réz','rez','pirit','cink','wolfram','uránérc'],
+  crop:['olajbogyó','szőlő','citrusfélék'],
+  cropPool:['olajbogyó','olajbogyo','oliva','szőlő','szolo','citrus','narancs','búza','buza','napraforgó','mandula'],
+  // Spain: big rectangular Iberia with jagged pyrenees at top and tapering SW
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M257.3,26.8 L269.6,30.0 L269.0,33.9 L273.1,32.7 L313.2,40.4 L334.7,40.4 L336.8,37.5 L357.6,40.4 L360.7,45.2 L369.0,43.9 L377.9,46.7 L399.1,47.0 L406.8,44.8 L417.0,45.3 L420.0,48.0 L415.0,50.3 L418.1,54.4 L381.0,66.6 L347.5,70.7 L337.3,75.1 L343.0,77.0 L333.6,78.9 L304.1,98.7 L308.0,106.9 L321.0,112.3 L297.9,120.2 L288.6,129.8 L291.5,132.2 L272.2,133.4 L262.2,136.5 L247.2,147.1 L175.3,148.1 L165.5,151.7 L149.6,153.2 L143.6,158.1 L135.1,160.0 L121.9,157.2 L110.9,149.5 L110.0,147.9 L116.3,144.7 L110.6,146.1 L95.0,139.8 L95.6,138.4 L78.3,140.1 L77.1,130.5 L92.7,122.4 L87.9,122.6 L80.4,117.7 L82.3,113.1 L91.4,107.0 L85.8,105.6 L74.2,96.2 L87.5,95.8 L92.1,93.7 L94.6,89.7 L90.3,87.0 L97.4,83.9 L93.6,71.7 L116.4,62.1 L105.9,59.5 L103.5,54.4 L86.6,53.7 L78.4,56.5 L54.5,56.9 L52.2,55.3 L55.3,53.0 L50.9,50.8 L32.2,54.7 L31.1,51.4 L37.4,48.2 L33.4,48.0 L36.1,45.7 L33.5,41.4 L26.5,42.2 L29.8,38.4 L20.0,35.0 L21.8,31.3 L31.5,28.2 L48.1,27.0 L51.5,26.2 L51.2,23.5 L69.0,20.0 L89.4,24.0 L128.1,22.3 L170.3,26.7 L199.6,24.7 L217.4,27.5 L222.9,25.9 L240.0,28.3 L257.3,26.8 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'portugal', name:'Portugália',
+  namePool:['portugália','portugal'],
+  capital:'Lisszabon', capitalPool:['lisszabon','lissabon','lisbon','lisboa'],
+  cities:['Porto','Braga','Coimbra'],
+  citiesPool:[['porto','oporto'],['braga'],['coimbra'],['faro'],['setúbal','setubal'],['funchal'],['aveiro'],['évora','evora']],
+  rivers:['Tajo','Douro','Guadiana'],
+  riversPool:[['tajo','tagus','tejo'],['douro','duero'],['guadiana'],['minho','miño'],['mondego'],['sado']],
+  mineral:['ólom','réz','uránérc'],
+  mineralPool:['ólom','olom','réz','rez','uránérc','uranerc','wolfram','volfram','vasérc','pirit'],
+  crop:['olajbogyó','szőlő','parafatölgy'],
+  cropPool:['olajbogyó','olajbogyo','oliva','szőlő','szolo','parafatölgy','para','búza','kukorica','citrus'],
+  // Portugal: tall narrow vertical strip, slightly wider at north
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M106.0,25.6 L168.6,20.0 L185.2,23.4 L173.6,26.8 L182.5,29.2 L210.9,27.2 L274.2,28.6 L305.6,24.4 L370.3,25.5 L379.6,33.1 L408.3,34.0 L420.0,37.1 L332.3,51.7 L343.7,58.1 L346.8,70.1 L319.6,75.0 L336.3,79.0 L326.6,85.1 L309.2,88.3 L258.0,88.8 L282.5,94.2 L302.5,103.1 L323.8,105.3 L318.0,109.3 L289.1,114.5 L281.6,121.4 L310.6,128.8 L328.8,128.6 L320.8,132.5 L300.9,133.5 L269.2,140.9 L261.9,144.7 L273.9,155.4 L221.5,160.0 L128.0,156.9 L79.0,159.3 L101.5,148.8 L104.2,140.8 L93.6,134.8 L102.9,128.7 L93.3,121.7 L119.3,122.3 L103.4,119.8 L52.6,121.7 L48.1,116.1 L76.1,113.6 L86.3,106.9 L104.2,104.7 L84.3,106.4 L62.1,113.8 L20.7,114.1 L32.9,97.6 L60.6,92.1 L98.6,76.4 L94.3,72.5 L117.3,58.8 L120.4,49.5 L102.5,36.3 L108.7,32.4 L92.5,30.5 L106.0,25.6 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'italy', name:'Olaszország',
+  namePool:['olaszország','olaszorszag','italy','italia'],
+  capital:'Róma', capitalPool:['róma','roma','rome'],
+  cities:['Milánó','Nápoly','Torino'],
+  citiesPool:[['milánó','milano','milan'],['nápoly','napoli','naples'],['torino','turin'],['palermo'],['genova','genoa'],['bologna'],['firenze','florence','flórenc'],['velence','venezia','venice'],['bari'],['verona'],['catania']],
+  rivers:['Pó','Arno','Tiber'],
+  riversPool:[['pó','po'],['arno'],['tiber','tevere'],['adige'],['piave'],['isonzo']],
+  mineral:['kőolaj','földgáz','kén'],
+  mineralPool:['kőolaj','koolaj','olaj','földgáz','foldgaz','kén','ken','higany','vasérc','márvány'],
+  crop:['szőlő','olajbogyó','búza'],
+  cropPool:['szőlő','szolo','olajbogyó','olajbogyo','oliva','búza','buza','kukorica','citrus','paradicsom','rizs'],
+  // Italy: iconic boot shape with Sicily
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M33.3,36.8 L59.1,36.8 L70.5,33.4 L69.5,31.8 L80.5,29.3 L81.8,32.2 L93.9,34.6 L92.5,35.8 L100.8,37.9 L100.1,35.5 L108.5,31.6 L110.3,28.6 L114.4,28.8 L117.9,31.3 L131.7,30.5 L136.5,32.4 L138.7,32.1 L135.0,28.7 L136.7,27.0 L148.3,27.8 L149.0,23.2 L167.3,24.5 L175.7,21.6 L206.9,20.0 L206.4,22.2 L214.3,25.5 L258.6,28.2 L247.7,31.9 L256.3,33.2 L251.4,35.9 L255.2,36.0 L254.6,38.4 L264.5,41.2 L259.2,41.6 L261.4,41.1 L256.1,39.0 L250.6,39.9 L241.9,39.0 L236.0,40.9 L210.5,43.6 L208.8,46.6 L218.9,50.4 L214.2,52.8 L210.6,52.3 L209.6,53.9 L214.6,60.9 L254.0,69.9 L269.0,82.0 L286.9,88.0 L308.1,92.2 L341.7,92.7 L341.2,94.6 L333.2,96.4 L332.8,97.8 L402.1,109.2 L419.2,114.9 L416.9,119.0 L415.2,120.1 L406.2,118.6 L399.1,114.1 L383.2,113.3 L376.0,111.2 L367.5,111.8 L358.7,116.0 L353.8,121.1 L373.7,125.8 L375.8,130.8 L356.9,133.3 L354.6,138.3 L345.7,140.3 L338.1,144.2 L326.9,144.3 L324.1,141.3 L330.2,139.7 L333.7,135.0 L342.8,133.8 L343.2,131.5 L325.8,117.9 L300.8,114.7 L300.6,111.6 L294.5,109.0 L280.1,109.9 L284.2,108.2 L270.2,107.1 L259.7,101.5 L237.9,101.4 L222.5,98.4 L189.0,87.4 L171.0,85.7 L173.1,84.1 L157.6,78.6 L151.1,78.2 L151.3,75.0 L144.6,70.7 L142.0,66.0 L135.4,63.7 L92.1,58.1 L84.9,59.2 L66.5,65.7 L49.2,67.2 L55.4,62.8 L54.1,61.7 L43.3,62.1 L29.2,59.3 L27.3,56.9 L33.6,54.0 L32.3,52.4 L23.7,51.1 L20.2,49.0 L35.2,46.6 L37.5,44.6 L25.5,39.4 L33.3,36.8 Z
+    M321.9,140.7 L305.8,150.3 L312.4,155.4 L306.3,158.1 L306.2,160.0 L285.6,158.6 L277.4,155.5 L262.0,154.4 L232.4,148.9 L222.8,148.6 L215.9,145.8 L219.7,142.8 L226.0,141.2 L231.7,143.1 L244.8,141.1 L261.6,143.7 L306.4,141.6 L319.2,139.8 L323.8,140.1 L321.9,140.7 Z
+    M121.3,106.2 L127.2,111.3 L121.7,114.3 L123.9,117.6 L119.0,128.6 L101.9,127.7 L98.9,131.2 L88.2,131.7 L80.4,128.1 L79.8,124.5 L84.8,119.9 L80.0,118.9 L82.2,114.0 L72.7,109.3 L73.9,105.8 L85.6,106.6 L107.7,101.2 L120.8,104.4 L118.7,105.6 L121.3,106.2 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'austria', name:'Ausztria',
+  namePool:['ausztria','austria','österreich'],
+  capital:'Bécs', capitalPool:['bécs','becs','wien','vienna'],
+  cities:['Graz','Linz','Salzburg'],
+  citiesPool:[['graz'],['linz'],['salzburg'],['innsbruck'],['klagenfurt'],['villach'],['wels'],['st. pölten','sanktpölten']],
+  rivers:['Duna','Inn','Mur'],
+  riversPool:[['duna','danube','donau'],['inn'],['mur','mura'],['salzach'],['enns'],['dráva','drau','drava'],['traun']],
+  mineral:['vasérc','magnezit','szén'],
+  mineralPool:['vasérc','vaserc','magnezit','szén','szen','kőolaj','grafít','wolfram','só'],
+  crop:['búza','árpa','cukorrépa'],
+  cropPool:['búza','buza','árpa','arpa','cukorrépa','kukorica','rozs','burgonya','zab','repce'],
+  // Austria: wide east-west elongated, thinner in center (Tirol), broad east (Vienna)
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M20.2,113.9 L25.3,103.4 L20.0,100.3 L31.8,97.6 L55.5,108.9 L54.6,113.5 L64.3,108.8 L68.0,98.9 L90.8,100.6 L99.6,107.4 L135.1,97.2 L159.7,95.2 L160.9,89.9 L175.3,94.3 L185.9,92.5 L190.4,94.2 L192.4,99.4 L203.1,102.8 L205.2,93.3 L197.0,89.7 L199.9,80.6 L189.8,70.6 L192.6,66.0 L222.0,55.1 L227.9,43.0 L240.4,45.2 L243.6,42.7 L245.1,32.9 L257.4,41.9 L291.1,42.1 L296.1,34.0 L303.3,32.7 L307.0,20.0 L350.6,27.5 L362.8,33.6 L379.1,34.4 L388.3,31.3 L406.2,36.4 L409.8,42.1 L405.2,53.7 L420.0,74.4 L413.8,83.5 L415.8,90.5 L401.0,92.0 L390.8,88.2 L381.9,92.3 L393.4,95.8 L395.3,99.7 L392.5,104.4 L383.0,107.0 L384.0,127.1 L361.7,136.5 L357.6,145.4 L347.6,143.6 L330.4,147.9 L301.7,149.2 L283.7,160.0 L175.1,145.6 L158.0,131.7 L158.8,123.9 L138.1,129.0 L110.3,129.6 L93.6,140.5 L68.7,135.5 L63.3,129.1 L52.0,136.2 L38.6,131.6 L36.9,127.9 L23.0,125.3 L24.5,122.6 L20.2,113.9 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'serbia', name:'Szerbia',
+  namePool:['szerbia','serbia'],
+  capital:'Belgrád', capitalPool:['belgrád','belgrad','belgrade','beograd'],
+  cities:['Novi Sad','Niš','Kragujevac'],
+  citiesPool:[['novi sad','újvidék','ujvidek'],['niš','nis'],['kragujevac'],['subotica','szabadka'],['zrenjanin','nagybecskerek'],['čačak'],['šabac'],['smederevo']],
+  rivers:['Duna','Száva','Morava'],
+  riversPool:[['duna','danube'],['száva','sava'],['morava'],['tisza','tisa'],['drina'],['ibar'],['timok']],
+  mineral:['réz','szén','vasérc'],
+  mineralPool:['réz','rez','szén','szen','vasérc','vaserc','ólom','olom','cink','arany','higany','lignit'],
+  crop:['kukorica','búza','napraforgó'],
+  cropPool:['kukorica','búza','buza','napraforgó','napraforgo','szőlő','szolo','cukorrépa','szilva'],
+  // Serbia: wider in the north (Vojvodina), narrowing south toward Kosovo
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M263.7,68.9 L334.6,79.2 L373.7,73.3 L395.3,76.9 L374.1,81.0 L393.7,90.0 L383.3,95.8 L366.2,98.2 L361.3,106.2 L379.2,117.8 L420.0,127.1 L393.8,137.7 L370.7,139.2 L367.7,146.6 L377.0,151.7 L366.4,157.0 L283.3,159.8 L279.1,157.0 L301.7,145.2 L266.7,142.4 L267.9,139.6 L209.6,124.6 L192.5,126.7 L192.6,132.5 L165.5,139.7 L158.2,135.9 L95.0,127.6 L56.7,117.9 L60.2,113.2 L79.2,114.0 L83.4,111.1 L59.2,99.7 L92.0,96.9 L47.0,85.7 L69.3,67.0 L35.1,66.1 L43.8,65.3 L41.6,57.7 L48.8,55.6 L74.2,55.0 L36.0,48.2 L41.8,44.0 L27.6,40.9 L20.0,32.3 L42.0,25.9 L62.4,26.1 L86.9,20.5 L152.5,21.6 L207.1,35.4 L209.0,45.7 L276.3,57.3 L263.0,62.3 L280.4,66.3 L263.7,68.9 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'bulgaria', name:'Bulgária',
+  namePool:['bulgária','bulgaria'],
+  capital:'Szófia', capitalPool:['szófia','sofia','szofia'],
+  cities:['Plovdiv','Várna','Burgasz'],
+  citiesPool:[['plovdiv'],['várna','varna'],['burgasz','burgas'],['ruszé','ruse'],['sztara zagora','stara zagora'],['pleven'],['szlivén','sliven']],
+  rivers:['Duna','Marica','Iszkár'],
+  riversPool:[['duna','danube'],['marica','maritsa'],['iszkár','iskar'],['sztruma','struma'],['mesta'],['jantra','yantra']],
+  mineral:['réz','szén','vasérc'],
+  mineralPool:['réz','rez','szén','szen','vasérc','vaserc','ólom','olom','cink','mangán','lignit'],
+  crop:['búza','kukorica','napraforgó'],
+  cropPool:['búza','buza','kukorica','napraforgó','napraforgo','szőlő','szolo','dohány','rózsa'],
+  // Bulgaria: roughly trapezoidal, wider than tall, straight north (Danube), irregular south
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M383.4,126.7 L352.7,128.9 L334.1,121.0 L293.7,126.9 L274.9,138.3 L261.2,137.9 L263.0,153.5 L249.4,156.9 L206.3,160.0 L189.8,154.5 L175.7,154.9 L157.4,145.7 L56.7,155.8 L62.3,137.3 L51.6,125.6 L20.0,110.7 L31.5,104.8 L25.9,96.1 L27.9,86.1 L43.2,84.1 L60.6,69.9 L29.9,54.2 L21.6,41.8 L23.5,32.8 L36.2,27.8 L43.1,20.0 L63.9,27.6 L53.6,33.9 L56.9,39.3 L76.4,37.4 L222.1,47.0 L268.1,31.0 L324.0,23.4 L345.7,30.4 L375.1,32.0 L385.7,39.8 L396.7,42.2 L420.0,43.6 L418.5,55.1 L412.3,60.4 L391.1,60.1 L377.9,69.9 L375.4,90.4 L349.5,103.6 L363.8,109.1 L383.4,126.7 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'greece', name:'Görögország',
+  namePool:['görögország','gorogorszag','greece','hellas'],
+  capital:'Athén', capitalPool:['athén','athen','athens','athina'],
+  cities:['Thesszaloniki','Patras','Iraklio'],
+  citiesPool:[['thesszaloniki','thessaloniki','szaloniki','saloniki'],['patras','patra'],['iraklio','heraklion'],['larissza','larissa'],['volos'],['ioannina'],['kavala'],['pireusz','piraeus']],
+  rivers:['Vardar','Marica','Evros'],
+  riversPool:[['vardar','axios'],['marica','maritsa'],['evros','meric','hebros'],['aliakmon'],['acheloos'],['peneios','pinios']],
+  mineral:['bauxit','nikkel','lignit'],
+  mineralPool:['bauxit','bauxite','nikkel','nickel','lignit','márvány','marvany','vasérc','chromit','kén'],
+  crop:['olajbogyó','szőlő','citrusfélék'],
+  cropPool:['olajbogyó','olajbogyo','oliva','szőlő','szolo','citrus','narancs','búza','buza','dohány','gyapot','füge'],
+  // Greece: irregular mainland + Peloponnese peninsula + Crete island
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M401.6,20.6 L417.4,23.1 L420.0,27.4 L402.2,30.9 L403.6,36.0 L388.9,41.3 L328.2,36.1 L309.4,39.0 L290.3,37.1 L266.5,41.8 L247.2,41.3 L253.4,48.3 L274.3,50.2 L282.2,54.0 L256.2,49.6 L245.1,50.2 L259.5,54.7 L258.3,57.9 L241.2,52.4 L226.8,51.6 L227.3,54.7 L241.8,58.0 L225.0,57.4 L219.9,52.6 L194.8,48.7 L196.4,44.7 L178.7,46.7 L176.5,56.4 L220.9,74.4 L210.4,75.9 L210.9,72.7 L196.3,71.7 L191.4,72.6 L194.2,74.5 L199.0,77.4 L205.1,77.2 L175.1,80.8 L216.4,85.0 L242.4,91.4 L259.5,93.0 L264.8,104.5 L259.8,105.2 L231.4,97.9 L203.3,101.1 L213.0,106.3 L225.0,107.2 L230.6,110.0 L210.8,112.1 L202.0,109.1 L184.5,107.9 L210.8,130.0 L184.0,123.0 L177.4,123.3 L170.3,130.0 L166.5,129.4 L163.4,124.9 L145.6,118.3 L138.0,119.1 L134.2,124.2 L124.9,121.7 L115.5,117.3 L121.3,111.1 L87.8,100.8 L104.7,94.6 L120.1,95.0 L130.1,91.9 L137.9,92.0 L196.3,99.4 L194.6,97.6 L212.2,95.9 L166.2,89.6 L160.0,91.3 L138.6,90.1 L108.9,92.0 L100.3,88.6 L98.6,90.9 L91.3,91.5 L66.3,80.6 L87.1,80.2 L87.5,77.4 L67.0,77.8 L38.1,71.2 L20.0,63.2 L34.9,63.9 L43.0,61.3 L38.7,57.6 L59.6,54.7 L68.6,47.7 L82.2,44.0 L78.2,39.2 L115.1,38.8 L140.3,33.2 L170.5,33.4 L184.5,32.1 L188.0,28.9 L239.4,27.7 L264.9,24.7 L292.8,24.1 L308.2,28.3 L337.0,30.8 L377.6,29.3 L390.4,27.7 L387.4,20.9 L401.6,20.6 Z
+    M252.6,148.2 L271.5,147.0 L268.1,148.9 L282.9,151.6 L305.0,150.3 L350.6,152.7 L366.0,151.8 L369.7,156.3 L401.6,152.5 L392.3,158.3 L309.8,160.0 L304.3,157.0 L289.5,155.6 L236.9,153.6 L235.5,148.2 L241.7,148.6 L245.6,145.8 L252.6,148.2 Z
+    M226.2,78.9 L232.8,81.9 L269.2,85.3 L278.1,94.1 L295.5,95.6 L296.4,98.2 L283.2,98.2 L263.9,90.6 L240.4,89.5 L216.3,82.1 L193.9,81.2 L216.7,77.4 L226.2,78.9 Z
+    M407.0,71.2 L418.2,77.0 L411.8,76.5 L415.3,78.1 L410.6,78.6 L388.8,76.3 L398.8,73.9 L386.6,76.0 L372.8,73.9 L392.3,70.3 L407.0,71.2 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+},
+{
+  id:'uk', name:'Egyesült Királyság',
+  namePool:['egyesült királyság','egyesult kiralysag','united kingdom','uk','nagy-britannia','anglia','britannia','great britain'],
+  capital:'London', capitalPool:['london'],
+  cities:['Manchester','Birmingham','Glasgow'],
+  citiesPool:[['manchester'],['birmingham'],['glasgow'],['liverpool'],['leeds'],['edinburgh','edinburg'],['bristol'],['sheffield'],['cardiff'],['belfast'],['nottingham']],
+  rivers:['Temze','Severn','Trent'],
+  riversPool:[['temze','thames'],['severn'],['trent'],['mersey'],['tyne'],['clyde'],['avon'],['wye']],
+  mineral:['kőolaj','földgáz','szén'],
+  mineralPool:['kőolaj','koolaj','olaj','földgáz','foldgaz','szén','szen','kálisó','vasérc','ón'],
+  crop:['búza','árpa','burgonya'],
+  cropPool:['búza','buza','árpa','arpa','burgonya','repce','zab','cukorrépa'],
+  // UK: Great Britain (main island with Scotland bump NW) + Northern Ireland hint
+  svg:`<svg viewBox="0 0 440 180" xmlns="http://www.w3.org/2000/svg">
+<path d="M241.5,136.1 L216.2,139.6 L205.3,139.3 L192.0,136.6 L178.1,136.9 L183.9,135.6 L172.0,134.3 L151.1,136.1 L142.1,134.9 L136.6,132.2 L181.6,125.4 L188.4,122.0 L184.4,121.0 L183.5,116.2 L160.0,117.9 L176.8,112.6 L197.1,110.1 L214.9,109.5 L224.1,110.8 L221.4,108.7 L225.4,108.2 L231.3,110.1 L238.2,110.0 L225.4,106.8 L231.1,103.4 L226.2,101.6 L232.1,99.7 L233.4,96.2 L221.3,97.0 L204.1,90.0 L209.3,86.6 L226.6,83.6 L205.8,83.7 L189.3,86.5 L177.4,85.4 L166.7,86.8 L154.5,85.4 L150.8,87.9 L141.7,85.2 L140.2,83.1 L144.9,83.1 L160.2,74.6 L151.5,71.3 L154.2,67.4 L164.0,67.3 L153.5,65.4 L155.2,63.6 L138.5,68.1 L138.2,65.1 L147.3,62.3 L131.7,65.9 L131.6,70.1 L124.7,76.4 L116.1,76.9 L126.8,69.6 L122.0,69.4 L125.5,62.0 L139.6,53.4 L120.8,57.2 L101.4,54.0 L117.6,51.7 L112.3,50.9 L123.3,47.4 L124.5,45.1 L115.0,42.6 L114.7,41.0 L123.6,39.7 L117.0,37.5 L122.6,33.8 L140.8,33.8 L130.5,30.4 L133.5,27.4 L146.8,27.0 L143.5,24.8 L146.5,21.5 L170.1,22.5 L225.9,20.3 L219.5,25.9 L188.0,32.4 L186.2,34.3 L193.4,34.9 L182.2,39.1 L216.1,36.8 L265.5,36.9 L273.9,38.5 L277.4,40.9 L248.2,55.4 L215.5,60.1 L232.7,59.5 L242.1,60.9 L241.2,62.0 L213.4,65.8 L196.1,64.6 L226.1,67.1 L244.3,65.8 L262.5,67.9 L282.4,73.4 L299.5,87.7 L322.2,91.0 L346.0,97.2 L341.1,98.7 L354.0,105.3 L338.5,103.3 L322.7,103.5 L337.5,104.0 L360.3,109.6 L363.8,112.4 L351.2,116.4 L360.7,117.9 L372.0,115.4 L392.1,115.6 L405.3,116.6 L418.8,119.9 L420.0,123.2 L412.4,129.1 L399.2,130.8 L400.9,132.7 L397.4,133.4 L379.8,134.5 L385.7,135.1 L385.4,136.9 L366.5,138.5 L406.6,140.1 L405.9,142.8 L391.6,144.8 L388.2,146.6 L357.7,149.0 L317.6,149.0 L292.1,147.1 L295.4,148.2 L288.0,149.3 L267.2,149.6 L270.0,151.1 L267.0,151.4 L228.1,149.7 L211.7,151.0 L200.6,156.8 L179.7,154.5 L158.2,156.0 L142.4,159.8 L122.0,159.6 L120.6,158.4 L151.5,152.5 L164.0,148.8 L166.5,145.8 L175.6,145.1 L180.0,142.7 L222.6,142.4 L251.0,134.3 L241.5,136.1 Z
+    M97.9,97.7 L80.5,98.1 L80.6,96.5 L66.0,92.5 L53.2,96.9 L41.8,96.8 L31.7,95.6 L20.0,91.8 L35.8,89.5 L29.5,87.8 L44.0,86.7 L51.1,82.4 L57.5,81.4 L62.2,82.1 L68.4,79.9 L87.5,78.9 L101.5,79.3 L118.2,85.9 L111.6,88.7 L123.6,88.4 L128.2,91.0 L127.6,92.0 L120.0,90.2 L120.6,92.9 L124.6,93.1 L122.6,94.7 L113.8,95.3 L106.0,98.3 L97.9,97.7 Z"
+  fill="#e8d5b0" stroke="#1a1008" stroke-width="2.5"
+  stroke-linejoin="round" stroke-linecap="round"/>
+</svg>`
+}
+];
+
+// ═══════════════════════════════════════════════════
+//  SEGÉDFÜGGVÉNYEK
+// ═══════════════════════════════════════════════════
+function norm(s){
+  return (s||'').toLowerCase().trim()
+    .replace(/[áàâäã]/g,'a').replace(/[éèêë]/g,'e')
+    .replace(/[íìîï]/g,'i').replace(/[óòôöő]/g,'o')
+    .replace(/[úùûüű]/g,'u').replace(/[ñ]/g,'n')
+    .replace(/[çć]/g,'c').replace(/[şș]/g,'s')
+    .replace(/[ăâ]/g,'a').replace(/[ț]/g,'t')
+    .replace(/[ß]/g,'ss').replace(/\s+/g,' ');
+}
+function lev(a,b){
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},(_,i)=>Array.from({length:n+1},(_,j)=>i?j?0:i:j));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
+function fuzzy(v,pool){
+  const n=norm(v); if(!n||n.length<2) return false;
+  return pool.some(p=>{
+    const np=norm(p);
+    if(np===n) return true;
+    if(n.length>=3&&np.startsWith(n)) return true;
+    if(np.length>=3&&n.startsWith(np)) return true;
+    if(n.length>=5&&np.length>=5&&lev(n,np)<=2) return true;
+    if(n.length>=3&&np.includes(n)) return true;
+    return false;
+  });
+}
+function checkSlots(vals,pool){
+  const used=new Set();
+  return vals.map(v=>{
+    if(!norm(v)) return false;
+    for(let i=0;i<pool.length;i++){
+      if(used.has(i)) continue;
+      if(fuzzy(v,pool[i])){ used.add(i); return true; }
+    }
+    return false;
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+let selCount=7, mainQueue=[], leitnerQ=[], curQueue=[], curIdx=0;
+let totalScore=0, isLeitner=false, leitnerPass=0, checked=false;
+let allResults=[];
+
+// ═══════════════════════════════════════════════════
+//  DOM
+// ═══════════════════════════════════════════════════
+const $=id=>document.getElementById(id);
+const setupSc=$('setupScreen'), quizSc=$('quizScreen'), sumSc=$('summaryScreen');
+const countNumEl=$('countNum'), chipsEl=$('countryChips');
+const progFill=$('progressFill'), progLbl=$('progressLbl'), progSc=$('progressSc');
+const mapBox=$('mapBox');
+const checkBtn=$('checkBtn'), nextBtn=$('nextBtn');
+const ptsBadge=$('ptsBadge'), ptsN=$('ptsN');
+const leitnerBar=$('leitnerBar'), leitnerPassEl=$('leitnerPass');
+const qCur=$('qCur'), qTot=$('qTot'), qLbl=$('qLbl');
+const toastEl=$('toastEl');
+const leitnerBox=$('leitnerBox'), leitnerChips=$('leitnerChips'), leitnerBtn=$('leitnerBtn');
+const sumStats=$('sumStats'), crList=$('crList'), rtblBody=$('rtblBody');
+const newGameBtn=$('newGameBtn');
+
+const INP={
+  country:$('i_country'), capital:$('i_capital'),
+  city1:$('i_city1'), city2:$('i_city2'), city3:$('i_city3'),
+  river1:$('i_river1'), river2:$('i_river2'), river3:$('i_river3'),
+  mineral:$('i_mineral'), crop:$('i_crop')
+};
+
+// ═══════════════════════════════════════════════════
+//  SETUP
+// ═══════════════════════════════════════════════════
+function renderChips(){
+  chipsEl.innerHTML='';
+  DB.forEach((c,i)=>{
+    const d=document.createElement('div');
+    d.className='chip'+(i<selCount?' selected':'');
+    d.textContent=c.name;
+    chipsEl.appendChild(d);
+  });
+}
+renderChips();
+
+function setCount(v){
+  selCount=Math.max(1,Math.min(14,v));
+  countNumEl.textContent=selCount;
+  renderChips();
+}
+$('btnPlus').addEventListener('click',()=>setCount(selCount+1));
+$('btnMinus').addEventListener('click',()=>setCount(selCount-1));
+
+function showScreen(s){
+  [setupSc,quizSc,sumSc].forEach(x=>x.classList.add('hide'));
+  s.classList.remove('hide');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ═══════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════
+$('startBtn').addEventListener('click',()=>{
+  mainQueue=[...DB].sort(()=>Math.random()-.5).slice(0,selCount);
+  curQueue=[...mainQueue];
+  curIdx=0; totalScore=0; allResults=[]; isLeitner=false;
+  leitnerQ=[]; leitnerPass=0; checked=false;
+  leitnerBar.classList.add('hide');
+  showScreen(quizSc);
+  loadQ();
+});
+
+// ═══════════════════════════════════════════════════
+//  LOAD QUESTION
+// ═══════════════════════════════════════════════════
+function loadQ(){
+  checked=false;
+  const c=curQueue[curIdx];
+  mapBox.innerHTML=c.svg;
+  const tot=curQueue.length;
+  progFill.style.width=(curIdx/tot*100)+'%';
+  progLbl.textContent=`${curIdx+1} / ${tot}. ország`;
+  progSc.textContent=`Pont: ${totalScore}`;
+  qCur.textContent=curIdx+1; qTot.textContent=tot;
+  if(isLeitner){
+    qLbl.textContent='🔁 Leitner-ismétlés';
+    leitnerBar.classList.remove('hide');
+    leitnerPassEl.textContent=`${leitnerPass} átment`;
+  } else {
+    qLbl.textContent='Normál kör';
+    leitnerBar.classList.add('hide');
+  }
+  // City/river accepteds
+  const ac=$('acc_cities');
+  ac.textContent='Elfogadott városok: '+c.citiesPool.flat().filter((v,i,a)=>a.indexOf(v)===i).slice(0,18).join(', ');
+  ac.classList.add('show');
+  const ar=$('acc_rivers');
+  ar.textContent='Elfogadott folyók: '+c.riversPool.flat().filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+  ar.classList.add('show');
+  // Clear form
+  Object.entries(INP).forEach(([k,inp])=>{
+    inp.value=''; inp.disabled=false;
+    inp.className='f-inp';
+  });
+  ['country','capital','city1','city2','city3','river1','river2','river3','mineral','crop'].forEach(k=>{
+    const h=$('h_'+k), ic=$('ic_'+k);
+    if(h){h.textContent='';h.classList.remove('show');}
+    if(ic) ic.textContent='';
+  });
+  ['acc_mineral','acc_crop'].forEach(id=>{
+    const el=$(id); if(el){el.textContent='';el.classList.remove('show');}
+  });
+  checkBtn.classList.remove('hide');
+  nextBtn.classList.add('hide');
+  ptsBadge.classList.remove('show');
+  INP.country.focus();
+}
+
+// ═══════════════════════════════════════════════════
+//  CHECK
+// ═══════════════════════════════════════════════════
+checkBtn.addEventListener('click',()=>{
+  if(checked) return;
+  checked=true;
+  const c=curQueue[curIdx];
+  let pts=0;
+  const checks={}, userInputs={};
+
+  function mark(key,ok,correct,accepted){
+    const inp=INP[key];
+    const hint=$('h_'+key);
+    const icon=$('ic_'+key);
+    userInputs[key]=inp.value;
+    inp.disabled=true;
+    checks[key]=ok;
+    if(ok){
+      inp.classList.add('correct'); pts++;
+      if(icon) icon.textContent='✅';
+    } else {
+      inp.classList.add('incorrect');
+      if(icon) icon.textContent='❌';
+      if(hint&&correct){hint.textContent='✔ Helyes: '+correct;hint.classList.add('show');}
+    }
+    if(accepted){
+      const el=document.getElementById('acc_'+key);
+      if(el&&!ok){el.textContent='Elfogadott: '+accepted;el.classList.add('show');}
+    }
+  }
+
+  mark('country', fuzzy(INP.country.value,c.namePool), c.name);
+  mark('capital', fuzzy(INP.capital.value,[c.capital,...(c.capitalPool||[])]), c.capital);
+
+  const cr=checkSlots([INP.city1.value,INP.city2.value,INP.city3.value],c.citiesPool);
+  mark('city1',cr[0],c.cities[0]);
+  mark('city2',cr[1],c.cities[1]);
+  mark('city3',cr[2],c.cities[2]);
+
+  const rr=checkSlots([INP.river1.value,INP.river2.value,INP.river3.value],c.riversPool);
+  mark('river1',rr[0],c.rivers[0]);
+  mark('river2',rr[1],c.rivers[1]);
+  mark('river3',rr[2],c.rivers[2]);
+
+  mark('mineral',fuzzy(INP.mineral.value,c.mineralPool),c.mineral.join(', '),c.mineral.join(', '));
+  mark('crop',fuzzy(INP.crop.value,c.cropPool),c.crop.join(', '),c.crop.join(', '));
+
+  totalScore+=pts;
+  ptsN.textContent=pts; ptsBadge.classList.add('show');
+  progSc.textContent=`Pont: ${totalScore}`;
+
+  const ex=allResults.findIndex(r=>r.id===c.id);
+  const res={id:c.id,country:c,pts,checks,userInputs,maxPts:10};
+  if(ex>=0) allResults[ex]=res; else allResults.push(res);
+
+  if(isLeitner){
+    const ok=Object.values(checks).every(Boolean);
+    if(ok){ leitnerPass++; leitnerPassEl.textContent=`${leitnerPass} átment`; showToast('✅ Tökéletes! Kész!'); }
+    else showToast(`⚠️ ${pts}/10 — Újra jön!`);
+  } else {
+    if(pts===10) showToast('🏆 Tökéletes! 10/10 pont!');
+    else if(pts>=8) showToast(`⭐ Kiváló! ${pts}/10`);
+    else if(pts>=5) showToast(`👍 Jó! ${pts}/10`);
+    else showToast(`📚 ${pts}/10 — Tanulj tovább!`);
+  }
+  if(pts===10) doConfetti();
+
+  checkBtn.classList.add('hide');
+  nextBtn.classList.remove('hide');
+  progFill.style.width=((curIdx+1)/curQueue.length*100)+'%';
+});
+
+// ═══════════════════════════════════════════════════
+//  NEXT
+// ═══════════════════════════════════════════════════
+nextBtn.addEventListener('click',()=>{
+  if(isLeitner){
+    const c=curQueue[curIdx];
+    const res=allResults.find(r=>r.id===c.id);
+    const ok=res&&Object.values(res.checks).every(Boolean);
+    const rem=curQueue.slice(curIdx+1);
+    if(!ok) rem.push(c);
+    if(rem.length===0){ showSummary(); return; }
+    curQueue=rem; curIdx=0; checked=false;
+    loadQ();
+  } else {
+    curIdx++;
+    if(curIdx>=curQueue.length) showSummary();
+    else loadQ();
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  SUMMARY
+// ═══════════════════════════════════════════════════
+function showSummary(){
+  showScreen(sumSc); isLeitner=false;
+  const max=allResults.length*10;
+  const pts=allResults.reduce((s,r)=>s+r.pts,0);
+  const perf=allResults.filter(r=>r.pts===10).length;
+  const pct=max?Math.round(pts/max*100):0;
+  let grade=pct===100?'🏆 Mester!':pct>=85?'⭐ Kiváló!':pct>=65?'👍 Jó':pct>=45?'📖 Haladó':'📚 Tanulj!';
+
+  sumStats.innerHTML=`
+    <div class="stat-box"><div class="stat-val">${pts}</div><div class="stat-lbl">Összes pont</div></div>
+    <div class="stat-box"><div class="stat-val">${max}</div><div class="stat-lbl">Max pont</div></div>
+    <div class="stat-box"><div class="stat-val ${pct>=70?'good':'bad'}">${pct}%</div><div class="stat-lbl">Eredmény</div></div>
+    <div class="stat-box"><div class="stat-val good">${perf}</div><div class="stat-lbl">Tökéletes</div></div>
+    <div class="stat-box"><div class="stat-val" style="font-size:20px">${grade}</div><div class="stat-lbl">Értékelés</div></div>
+  `;
+
+  const failed=allResults.filter(r=>!Object.values(r.checks).every(Boolean));
+  leitnerQ=failed.map(r=>r.country);
+  if(leitnerQ.length>0){
+    leitnerBox.style.display='block';
+    leitnerChips.innerHTML=leitnerQ.map(c=>`<div class="lchip">${c.name}</div>`).join('');
+  } else {
+    leitnerBox.style.display='none';
+    if(pct===100) doConfetti();
+  }
+
+  crList.innerHTML='';
+  allResults.forEach(r=>{
+    const ok=Object.values(r.checks).every(Boolean);
+    const d=document.createElement('div');
+    d.className=`cr-item ${ok?'ok':'fail'}`;
+    d.innerHTML=`<div class="cr-mini">${r.country.svg}</div>
+      <div class="cr-icon" style="font-size:18px">${ok?'✅':'❌'}</div>
+      <div class="cr-name">${r.country.name}</div>
+      <div class="cr-pts">${r.pts}/10 pont</div>`;
+    crList.appendChild(d);
+  });
+
+  const FIELDS=[
+    {k:'country',l:'Ország neve',a:c=>c.name},
+    {k:'capital',l:'Főváros',a:c=>c.capital},
+    {k:'city1',l:'Város 1',a:c=>c.cities[0]},
+    {k:'city2',l:'Város 2',a:c=>c.cities[1]},
+    {k:'city3',l:'Város 3',a:c=>c.cities[2]},
+    {k:'river1',l:'Folyó 1',a:c=>c.rivers[0]},
+    {k:'river2',l:'Folyó 2',a:c=>c.rivers[1]},
+    {k:'river3',l:'Folyó 3',a:c=>c.rivers[2]},
+    {k:'mineral',l:'Ásványkincs',a:c=>c.mineral.join(', ')},
+    {k:'crop',l:'Növény',a:c=>c.crop.join(', ')},
+  ];
+  rtblBody.innerHTML='';
+  allResults.forEach(r=>{
+    FIELDS.forEach((f,fi)=>{
+      const ok=r.checks[f.k];
+      const corr=f.a(r.country);
+      const tr=document.createElement('tr');
+      if(fi===0){
+        tr.innerHTML=`<td rowspan="${FIELDS.length}" style="border-right:1px solid var(--paper3);min-width:100px">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <div style="width:32px;height:32px">${r.country.svg}</div>
+            <div><div style="font-weight:700;font-size:13px">${r.country.name}</div>
+            <div style="font-size:11px;color:var(--gold)">${r.pts}/10</div></div>
+          </div></td>
+          <td>${f.l}</td>
+          <td class="${ok?'rtd-ok':'rtd-fail'}">${r.userInputs[f.k]||'—'}</td>
+          <td>${ok?'<span style="color:var(--correct)">✔</span>':corr}</td>`;
+      } else {
+        tr.innerHTML=`<td>${f.l}</td>
+          <td class="${ok?'rtd-ok':'rtd-fail'}">${r.userInputs[f.k]||'—'}</td>
+          <td>${ok?'<span style="color:var(--correct)">✔</span>':corr}</td>`;
+      }
+      rtblBody.appendChild(tr);
+    });
+    const sep=document.createElement('tr');
+    sep.innerHTML=`<td colspan="4" style="padding:1px;background:var(--paper3)"></td>`;
+    rtblBody.appendChild(sep);
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  LEITNER START
+// ═══════════════════════════════════════════════════
+leitnerBtn.addEventListener('click',()=>{
+  if(!leitnerQ.length) return;
+  isLeitner=true; leitnerPass=0;
+  curQueue=[...leitnerQ].sort(()=>Math.random()-.5);
+  curIdx=0; checked=false;
+  leitnerQ.forEach(c=>{
+    const i=allResults.findIndex(r=>r.id===c.id);
+    if(i>=0) allResults[i].checks=Object.fromEntries(Object.keys(allResults[i].checks).map(k=>[k,false]));
+  });
+  showScreen(quizSc);
+  loadQ();
+});
+
+// ═══════════════════════════════════════════════════
+//  NEW GAME
+// ═══════════════════════════════════════════════════
+newGameBtn.addEventListener('click',()=>{
+  isLeitner=false; leitnerQ=[]; allResults=[]; totalScore=0;
+  renderChips(); showScreen(setupSc);
+});
+
+// ═══════════════════════════════════════════════════
+//  ENTER KEY
+// ═══════════════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!quizSc.classList.contains('hide')){
+    if(!checked) checkBtn.click();
+    else if(!nextBtn.classList.contains('hide')) nextBtn.click();
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════
+let tt;
+function showToast(m){
+  toastEl.textContent=m; toastEl.classList.add('show');
+  clearTimeout(tt); tt=setTimeout(()=>toastEl.classList.remove('show'),2800);
+}
+
+// ═══════════════════════════════════════════════════
+//  CONFETTI
+// ═══════════════════════════════════════════════════
+function doConfetti(){
+  const cols=['#b8860b','#d4a017','#8b3a1a','#2d6a2d','#1a5c5c','#f0c040','#c0502a'];
+  for(let i=0;i<70;i++){
+    const el=document.createElement('div');
+    el.className='cp';
+    const dur=1.5+Math.random()*2.2;
+    el.style.cssText=`left:${5+Math.random()*90}%;width:${5+Math.random()*9}px;height:${5+Math.random()*9}px;background:${cols[Math.floor(Math.random()*cols.length)]};border-radius:${Math.random()>.5?'50%':'2px'};--d:${dur}s;--dl:${Math.random()*.9}s;--dx:${-110+Math.random()*220}px;--rot:${Math.random()*720}deg`;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(),(dur+1)*1000);
+  }
+}
+</script>
+</body>
+</html>
